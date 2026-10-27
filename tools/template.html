@@ -1,3 +1,9 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2457d6"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="수학날개"><link rel="apple-touch-icon" href="icon.png"><link rel="icon" href="icon.png"><link rel="manifest" href="manifest.json">
+<meta name="robots" content="noindex,nofollow">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<script src="config.js"></script></head><body>
 <title>나의 수학날개</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
@@ -114,7 +120,6 @@ section{display:flex;flex-direction:column;gap:10px}
 footer{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 </style>
 
-<script id="app-data" type="application/json">{"month":"","updated":"","salt":"","iter":600000,"top":[],"students":{}}</script>
 
 <div class="wrap" id="app">
   <div id="loginView">
@@ -147,37 +152,30 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fle
 (() => {
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let D={top:[],students:{}};
-try{ D=JSON.parse($("app-data").textContent); }catch(e){}
+let D={top:[],topWeek:[]};
+let CODE="";
+async function api(body){
+  if(!window.SN_API) return {error:"no_api",message:"앱 준비 중이에요. 잠시 후 다시 열어 주세요."};
+  try{ const r=await fetch(window.SN_API,{method:"POST",body:JSON.stringify(body)}); return await r.json(); }
+  catch(e){ return {error:"network",message:"인터넷 연결을 확인해 주세요."}; }
+}
 const DOW=["일","월","화","수","목","금","토"];
 const ST={none:["미제출","--s-none","--s-none-bg"],sub:["선생님 확인 중","--s-sub","--s-sub-bg"],fix:["오답 정리하기","--s-fix","--s-fix-bg"],fixed:["확인 기다리는 중","--s-fixed","--s-fixed-bg"],done:["완료","--s-done","--s-done-bg"]};
-const month = D.month ? Number(D.month.split("-")[1]) : "";
+let month = "";
 let period="month", ME=null;
-function titles(){ ["rankTitle1","rankTitle2"].forEach(id=>$(id).textContent=(period==="week"?"이번 주 ":(month?month+"월 ":""))+"숙제왕 TOP 10"); document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.rp===period)); }
+function titles(){ month = D.month ? Number(D.month.split("-")[1]) : ""; ["rankTitle1","rankTitle2"].forEach(id=>$(id).textContent=(period==="week"?"이번 주 ":(month?month+"월 ":""))+"숙제왕 TOP 10"); document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.rp===period)); }
 titles();
 document.addEventListener("click",e=>{ const b=e.target.closest(".seg [data-rp]"); if(!b) return; period=b.dataset.rp; titles(); $("rank1").innerHTML=rankHtml(null); if(ME) $("rank2").innerHTML=rankHtml(ME); });
 
-function norm(c){ return String(c||"").toUpperCase().replace(/[^0-9A-Z]/g,""); }
-function hex(b){ return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
-function unhex(h){ const a=new Uint8Array(h.length/2); for(let i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; }
-function unb64(s){ const b=atob(s); const a=new Uint8Array(b.length); for(let i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a; }
-let KEY=null;
+function norm(c){ return String(c||"").replace(/\D/g,""); }
+const urlCache={};
 async function photoUrl(ph){
-  if(typeof ph==="string") return "/_blob/"+encodeURIComponent(ph);
-  const r=await fetch(ph.f,{cache:"force-cache"}); if(!r.ok) throw new Error("photo");
-  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(ph.iv)},KEY,await r.arrayBuffer());
-  return URL.createObjectURL(new Blob([pt],{type:ph.t||"image/jpeg"}));
+  const id=typeof ph==="string"?ph:ph.id; if(urlCache[id]) return urlCache[id];
+  const r=await api({op:"file",code:CODE,id}); if(!r.ok) throw new Error(r.message||"photo");
+  const bin=atob(r.b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return (urlCache[id]=URL.createObjectURL(new Blob([arr],{type:r.type||(ph&&ph.t)||"image/jpeg"})));
 }
-async function open(code){
-  const enc=new TextEncoder();
-  const base=await crypto.subtle.importKey("raw",enc.encode(norm(code)),"PBKDF2",false,["deriveBits"]);
-  const bits=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:unhex(D.salt),iterations:D.iter||600000},base,352));
-  const id=hex(bits.slice(0,12)); const blob=D.students&&D.students[id]; if(!blob) return null;
-  const key=await crypto.subtle.importKey("raw",bits.slice(12,44),"AES-GCM",false,["decrypt"]);
-  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(blob.iv)},key,unb64(blob.ct));
-  KEY=key;
-  return JSON.parse(new TextDecoder().decode(pt));
-}
+api({op:"top"}).then(r=>{ if(r&&r.ok){ D=Object.assign(D,r); titles(); $("rank1").innerHTML=rankHtml(null); } });
 
 function rankHtml(myName){
   const top=((period==="week"?D.topWeek:D.top)||[]).filter(r=>r.points>0);
@@ -254,7 +252,7 @@ function renderMain(p){
   $("hw").innerHTML = hw.length ? hw.map(r=>{const d=fmtD(r.date); const s=ST[r.status]||ST.none;
       return `<div class="hw"><div class="dt">${d.md}<small>${d.dow}요일</small></div><div><span class="pill" style="color:var(${s[1]});background:var(${s[2]})">${s[0]}</span>${r.memo?`<div class="fb">${esc(r.memo)}</div>`:""}</div></div>`}).join("")
     : `<div class="empty">아직 숙제 기록이 없어요.</div>`;
-  $("upd").textContent = D.updated ? D.updated+" 기준 · 매일 밤 업데이트" : "";
+  $("upd").textContent = D.updated ? D.updated+" 기준" : "";
   $("loginView").hidden=true; $("mainView").hidden=false; window.scrollTo(0,0);
 }
 
@@ -262,15 +260,23 @@ async function tryCode(code,silent){
   if(norm(code).length!==4){ if(!silent) $("err").textContent="숫자 4자리를 넣어 주세요."; return; }
   $("go").disabled=true; $("go").textContent="여는 중…"; $("err").textContent="";
   try{
-    const p=await open(code);
-    if(!p){ if(!silent) $("err").textContent="코드가 맞지 않아요. 선생님께 받은 코드를 다시 확인해 주세요."; try{ if(silent) localStorage.removeItem("sn-code"); }catch(e){} return; }
-    try{ localStorage.setItem("sn-code",norm(code)); }catch(e){}
-    renderMain(p);
+    const r=await api({op:"student",code:norm(code)});
+    if(!r.ok){
+      if(r.error==="bad_code"||r.error==="not_student"){ if(!silent) $("err").textContent=r.error==="not_student"?"학생 코드가 아니에요. 선생님께 받은 내 코드를 넣어 주세요.":"코드가 맞지 않아요. 선생님께 받은 코드를 다시 확인해 주세요."; try{ if(silent) localStorage.removeItem("sn-code"); }catch(e){} }
+      else if(!silent) $("err").textContent=r.message||"열 수 없어요. 잠시 후 다시 해 주세요.";
+      return; }
+    CODE=norm(code); D=Object.assign(D,r.data); titles(); $("rank1").innerHTML=rankHtml(null);
+    try{ localStorage.setItem("sn-code",CODE); }catch(e){}
+    renderMain(r.data.me);
   }catch(e){ if(!silent) $("err").textContent="열 수 없어요. 잠시 후 다시 해 주세요."; }
   finally{ $("go").disabled=false; $("go").textContent="내 앱 열기"; }
 }
 $("loginForm").addEventListener("submit",e=>{ e.preventDefault(); tryCode($("code").value,false); });
 $("logout").onclick=()=>{ try{ localStorage.removeItem("sn-code"); }catch(e){} $("code").value=""; $("mainView").hidden=true; $("loginView").hidden=false; };
 try{ const c=localStorage.getItem("sn-code"); if(c) tryCode(c,true); }catch(e){}
+let lastLoad=Date.now();
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&CODE&&Date.now()-lastLoad>60000){ lastLoad=Date.now(); tryCode(CODE,true); } });
 })();
 </script>
+
+</body></html>
