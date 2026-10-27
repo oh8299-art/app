@@ -1,0 +1,261 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2457d6"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="수학날개"><link rel="apple-touch-icon" href="icon.png"><link rel="icon" href="icon.png"><link rel="manifest" href="manifest.json">
+<meta name="robots" content="noindex,nofollow">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>나의 수학날개</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 학생 한 명의 수첩 — 맨 위 내 순위 카드, 그 아래 테스트 기록·숙제왕·최근 숙제가 차례로 쌓이는 한 줄 구성. */
+:root{
+  --bg:#edf4ff; --surface:#ffffff; --sunk:#e3ecfa; --line:#d3def2;
+  --ink:#17244a; --muted:#596788; --accent:#2457d6; --accent-ink:#ffffff; --sun:#f5b82e;
+  --gold:#e6a817; --silver:#8c9ab3; --bronze:#c47a3d;
+  --s-none:#9aa5b8; --s-sub:#2f7de1; --s-fix:#e0871b; --s-fixed:#8a4fd6; --s-done:#1f9d63;
+  --s-sub-bg:#e4effd; --s-fix-bg:#fdf0de; --s-fixed-bg:#f1e8fc; --s-done-bg:#e1f5ea; --s-none-bg:#eef1f5;
+  --f-display:"Do Hyeon","IBM Plex Sans KR","Apple SD Gothic Neo",sans-serif;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1430; --surface:#182046; --sunk:#121a3a; --line:#2b3566; --ink:#eaf0ff; --muted:#a1acd0; --accent:#7ea0ff; --accent-ink:#0e1430; --sun:#f2c14b;
+  --gold:#f2c14b; --silver:#b3bfd6; --bronze:#e0985e;
+  --s-none:#6c788d; --s-sub:#5a9bf0; --s-fix:#f0a043; --s-fixed:#b083f0; --s-done:#43c487;
+  --s-sub-bg:#1b2b55; --s-fix-bg:#3a2a14; --s-fixed-bg:#2c2150; --s-done-bg:#14352a; --s-none-bg:#1e2646; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1430; --surface:#182046; --sunk:#121a3a; --line:#2b3566; --ink:#eaf0ff; --muted:#a1acd0; --accent:#7ea0ff; --accent-ink:#0e1430; --sun:#f2c14b;
+  --gold:#f2c14b; --silver:#b3bfd6; --bronze:#e0985e;
+  --s-none:#6c788d; --s-sub:#5a9bf0; --s-fix:#f0a043; --s-fixed:#b083f0; --s-done:#43c487;
+  --s-sub-bg:#1b2b55; --s-fix-bg:#3a2a14; --s-fixed-bg:#2c2150; --s-done-bg:#14352a; --s-none-bg:#1e2646; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:560px;margin:0 auto;padding-block:20px 44px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+.brand{font-size:13px;letter-spacing:.12em;font-weight:700;color:var(--accent)}
+h1{font-family:var(--f-display);font-weight:400;font-size:38px;line-height:1.1;margin:0;text-wrap:balance}
+h2{font-family:var(--f-display);font-weight:400;font-size:24px;margin:0}
+.sub{color:var(--muted);font-size:13px;margin:0}
+button,input{font-family:var(--f-body)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* login */
+.login{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.login label{font-weight:700}
+.login input{width:100%;border:2px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:14px;font:700 24px var(--f-body);letter-spacing:.5em;text-indent:.5em;text-align:center;font-size:32px}
+.login input:focus{border-color:var(--accent);outline:none}
+.btn{border:0;border-radius:12px;padding:14px;background:var(--accent);color:var(--accent-ink);font:700 16px var(--f-body);cursor:pointer}
+.btn:disabled{opacity:.6;cursor:wait}
+.err{color:#d0453b;font-size:14px;margin:0;min-height:1.5em}
+.link{border:0;background:none;color:var(--muted);font:500 13px var(--f-body);text-decoration:underline;cursor:pointer;padding:4px;align-self:flex-start}
+/* hero */
+.me{background:var(--accent);color:var(--accent-ink);border-radius:18px;padding:18px 20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 16px;align-items:end}
+.me .hi{font-family:var(--f-display);font-size:30px;line-height:1.1;grid-column:1/-1}
+.me .gr{opacity:.85;font-size:13px;grid-column:1/-1;margin-bottom:8px}
+.me .k{font-size:12px;opacity:.85}
+.me .v{font-family:var(--f-display);font-size:34px;line-height:1}
+.me .v small{font-family:var(--f-body);font-size:14px;margin-left:2px}
+.me .stat{display:flex;flex-direction:column;gap:2px}
+.me .cheer{grid-column:1/-1;font-size:13px;background:rgba(255,255,255,.16);border-radius:10px;padding:8px 10px;margin-top:10px}
+section{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+/* tests */
+.trend{padding:12px 14px 4px}
+.trend svg{display:block;width:100%;height:auto}
+.test{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.card .test:first-child{border-top:0}
+.test .tt{font-weight:700;min-width:0}
+.test .dt{font-size:12px;color:var(--muted)}
+.test .sc{font-family:var(--f-display);font-size:26px;line-height:1;text-align:right;grid-row:1/3;grid-column:2;align-self:center}
+.test .sc small{font-family:var(--f-body);font-size:13px;color:var(--muted)}
+.test .meter{grid-column:1/-1;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.test .meter i{display:block;height:100%;background:var(--accent)}
+.test .cm{grid-column:1/-1;font-size:14px;background:var(--sunk);border-radius:8px;padding:7px 10px}
+/* ranking */
+.podium{display:grid;grid-template-columns:1fr 1.15fr 1fr;align-items:end;gap:8px;padding:14px 14px 0}
+.pod{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;min-width:0}
+.pod .nm{font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod .blk{width:100%;border-radius:10px 10px 0 0;color:#fff;display:flex;flex-direction:column;align-items:center;padding-top:8px}
+.pod .blk b{font-family:var(--f-display);font-weight:400;font-size:28px;line-height:1}
+.pod .blk span{font-size:12px;font-weight:600}
+.p1 .blk{background:var(--gold);height:110px}.p2 .blk{background:var(--silver);height:84px}.p3 .blk{background:var(--bronze);height:68px}
+.pod.mine .nm{color:var(--accent)}
+.rk{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.rk .no{font-family:var(--f-display);font-size:20px;color:var(--accent);text-align:center}
+.rk .nm{font-weight:600}
+.rk .nm small{color:var(--muted);font-weight:400;margin-left:6px}
+.rk.mine{background:var(--s-sub-bg)}
+.rk.mine .nm::after{content:"나";margin-left:6px;font-size:11px;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:1px 7px;vertical-align:2px}
+.rules{padding:10px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.shead{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.seg{display:inline-grid;grid-template-columns:1fr 1fr;background:var(--sunk);border-radius:10px;padding:3px;gap:3px}
+.seg button{border:0;background:transparent;color:var(--muted);font:700 13px var(--f-body);padding:6px 14px;border-radius:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.notice{background:var(--surface);border:2px solid var(--sun);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.notice.old{border:1px solid var(--line)}
+.notice .nd{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:6px;align-items:center}
+.notice .nd .today{background:var(--sun);color:#3a2a00;border-radius:999px;padding:1px 8px}
+.notice .nt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px}
+.nlist{display:flex;flex-direction:column;gap:8px}
+.dgrp{padding:10px 14px 2px;font-size:12px;font-weight:700;color:var(--muted);border-top:1px solid var(--line);background:var(--sunk)}
+.card .dgrp:first-child{border-top:0}
+.test{cursor:default}
+.test.has-photo{cursor:pointer}
+.test .ph{grid-column:1/-1;font-size:12px;color:var(--accent);font-weight:600}
+.photos{grid-column:1/-1;display:flex;flex-direction:column;gap:8px}
+.photos img{width:100%;border-radius:10px;border:1px solid var(--line);background:var(--sunk);display:block}
+/* homework */
+.hw{display:grid;grid-template-columns:62px minmax(0,1fr);gap:4px 12px;padding:11px 14px;border-top:1px solid var(--line);align-items:start}
+.card .hw:first-child{border-top:0}
+.hw .dt{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.hw .dt small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px}
+.hw .fb{font-size:14px;margin-top:4px;white-space:pre-wrap;overflow-wrap:anywhere}
+.empty{padding:22px 16px;text-align:center;color:var(--muted);font-size:14px}
+footer{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+</style>
+
+<script id="app-data" type="application/json">{"month":"2026-10","week":"2026-10-26","updated":"2026-10-27 09:24","salt":"ca65a3467bb87b8aa19eeec5b85dfe47","iter":600000,"top":[{"rank":1,"name":"이성모","grade":"4학년","points":3,"done":1},{"rank":2,"name":"김하율","grade":"5학년","points":1,"done":0},{"rank":2,"name":"노윤우","grade":"4학년","points":1,"done":0}],"topWeek":[{"rank":1,"name":"이성모","grade":"4학년","points":3,"done":1},{"rank":2,"name":"김하율","grade":"5학년","points":1,"done":0},{"rank":2,"name":"노윤우","grade":"4학년","points":1,"done":0}],"students":{"dc8e832ebbd1f19396feffbe":{"iv":"m/P63TouuQva4sjB","ct":"Qn6Nfqzv3oCsExaSgR+ZuP/qw24mrD5MLV/dcIoMSaYfqHIN91XWgxDODR1o1t6UvQoeyI6AQJXqugEGdXLgt0TLTgY+EsurvgPJAljLaB0IBlRkryzwfN/ofwTFsZIiNZ7Hh5cF0TGukDKxbWZxl4P5QZCEeTlO9sUlsAm3Knjob5C2+RSDYtqLdljKnqhtekxPTmOTlcIs8fLrgP2el0j36SwhtW9499Y="},"d6db77ecc44b50112abfc8d0":{"iv":"4/4P7YRcY93JuFVr","ct":"lQTi/br551rwKgM737W2i/PtIQa7imcV+soPNqo3rYSQ4uGU6aqb5QtDf63bG1qmI8VLBMRsOmBGX6M1N86Lr+zTOeClalyvJRVCC7KGbohgFtaqZmPl5t/VW6BFv9jbQJDvtK25nYqq2StJjwy/AOYd4HmQt6n5r8XX8YWplMRZsKnfpNgBYpxbth36jvbGMaHMMD9NGW70xko2vQSRBMochCWkJ9q3Z4h/8jEp2XskF9YNqV42EOJROA=="},"264dda8f3ae12696f5a1181e":{"iv":"pESWKSew2l/zlmTN","ct":"JRauSiwii5sFhJ23iSoWRLiV83XhPcjj7ShVdUYG1ejPIFLETu+EjHvkaarVpeXbmYuudM2HWTUB5hNkfIWbS/ho8kPDJffTeOhG6sIp0L2eKMcPOYM4ztKftKiElE7vhYAIbgIsF6rkihho7TL7+cPGc2L1xslNcuTFkPlISqfrtCASAHXdhpG+JFwJaDqm1hQKspk7aCyqeR0FU00yYd7WS/MQaVsMr3g="},"2cd467951eea19717076ffce":{"iv":"ucqXPHZ08YXM1fcI","ct":"fqPd1GOdEHT07PY1I+nAi3VZcpy2Aouoa1tVjQCy1yn5/FlD19HO8zoZB8Y6/logi0irTQD72vqowg0z+o3/ejQ8YyI3yFMrVk/ly/P7JDzhUu94nApISQTTxG3QzvbB5nLZJchV8FGJnESjz4Iv69U5/Fj1rT+5XUoppDfaWtSb5tRlhMmKQPoDkSQxbKalEzGXxZKy4ab8xS/xmmPgT/pQ+d7lMHk3yTY="},"728a6cd88285e35e16890a8d":{"iv":"/o2wptmq/ZPZpJx2","ct":"+moZql7Sgr9P8IMjtG486shxqwTIJdOB2wYChth7k3NNfiuLCaiR8y9bBozNYraq47i+cX94Xb3jLkvB1FUbjAO4tbSGslKvrNawLIPWM5so30MaA/inH0g0C5coZy+rfZki2Kwbu4rE8m2pN36pkSPVrPxasvFD9coJr3vcgseBmc7a8juq1ImmUFK8ge4UlhOFYZ7W9iyr/zK/9/Fc6Vif0ZVZY+9wR7M="},"f1d238e33f10d68efd2cc874":{"iv":"vIix9H+dt0Vt+OKA","ct":"tEhLLj50+xTHjDzlILZAfK84dCVepg3fHLUzSp+j3cpftrfWhE9aRQl/H7MPCDGgZz0Py3UX0F0qCH5e6OgQDMwfn1VXQBabsAU5mWBmdBouFvEwx2NExFWouyfxXBtWaWF/fB8QpHUgvxViF8PXyaxZQdQ4b28XIiHtVy5EaMyF/SLg+v70prTTm1yADwz8msS3J7PqCRI/4kL26EUXl53iBuolkHJCb7I="},"73415d0ab0153f76172dd968":{"iv":"MNYuMqDmsWVaKBPZ","ct":"pV2/A2O1id3rNlQqDG75RjnKkel6H38MmX/MDGficAEQniWQqMj2MUVrnx2iRV6oThoocTbrDDxrXk1voQ91pSfnfsoMzT72Jma+iNzMWO12KYh+bduKE8fKDvbCLKnqd613PMrG6F9Ee4j4yjIHA8LINZ3GSG+U3ix2Z6IMU0p6EpR3nRkt+uABjiL/emPgg4ny7PHIOHVOd2Sk/Xa4tqUhoRRRkwjOqeY="},"ad3734adabb688d3f77873c3":{"iv":"bUlG3T88sytb3AF5","ct":"hPK2iIt38/g3arL1FZtBCC2tmVc7QILx3r25pUCJVoWyC1J/MOpHDqBZWsNXQgX/gZGf/SIuPDOypUMf1FWTV1VIP9wXIekuwnN5nDzULMa0sIkogQSSRc2GJEinerBsJ4z6TRjTdiV+FeBcHJwmwPC/LNvSa3HR5Q00rgFymXbhm93ZamxJoeTmp8+4DJmQQsEL0DFOU4CDDzRL2vIFemNyprLwN3O2um4="},"b11b3a9604afea5c1e2e188c":{"iv":"9z+hBVByq5eyyJXg","ct":"qHC6AYH9ErJHO1XGzXP4Yr2ZXdJHR2oNd6RpPnv12EANkLjbp4w1WZP32tFt8Db4MqMENqyn69ygInXLWeRqd9zhOhbSWCYgOxvesTyvswFxHjUPDrWAiCCdMVAkBInBzrJb+WZiIudGGYCv5SIkpd7vjADVq21YVIak1KWWen58PggHRA4GstJpEEtOzm8N3e3kAFZP7SGdDR7IclOPAq9LWS7XoFuvErl7Xnd6ZokLA2bRQ+r/B4D8B6xVQbi3smx8M7YGLbDuAuxnBsblYTvr"},"8f728218834a3ef849a1c375":{"iv":"H0xYgf3P7yCNozyY","ct":"LZSmV4/PfueJa4wBeQ0U38PLOhKyEjv7Wi+Yzp5g+orMuwh8PIjpLAsJCOnjF/ntjGOgcVveInlwRreWZAiZWMHsSgOOUf4+YoYkZBKeQYJAtJ/+bwx5DF99FYasxxMgwFuaPDQrIUv+EkWpNcdZRzztWAcajNcQlTbxClGQcqudwbDaYkp5MBXW09bwnbaNb6RVuput38QnL2LEhlq9Vwo+nuwkAx+ozyc="},"9afd2d6aa87938665eb9b0a1":{"iv":"2YWV5JhdvyRuA2sp","ct":"Zm80xYLCyqYcJv7KVFku7beAKNCDyXAVRibdnwpCuVeVUDyqOLlGUxziHGltqJ4ypMYD1vpl+2A30zWLoMrDt7TszvENWAoZrLI29GNt2jbNp769bDE0QRn+zLSwozjw4U4cKDbq5Xdgf3OqcqJzYcu63z38nmbur08jrWCQblo1MYqvXqZvpLLNUv9/5WWsh+b4qI2HQBD5sxqQ9Zwl8ILSrLz76ODSYJs="},"c4fb9a75d74dd2d938491a46":{"iv":"aSkp3xjUVjWWQpQF","ct":"4ZFJfSgRYfOmO7TUquzyI30n89xCI2+pVKP2gCICRSXoXVIZQAl8wL1/UFhyQH7NhZTKEsxijQ7YQ0bigHUDKZwthyMQskUIgTVY4kKJkWCF4E4p+dybiunb6FOl1POpIcwz7JgrMVDLX5P2YFO9vCrKHcHsru0wez9QExBNwQgCr3SdXq2kAohOzampufPZ2rRk2tPSLbfua3Pkr76HnccOPt1bAkmkHvU="},"6d2043aefeb4933956130025":{"iv":"FyEVJHnJMip6i7qE","ct":"NUBi9HZUTTm4on7tffz0K8/H0uyolDOEcPUtzBx2RcaBSPATErQ1pHHXzHXAocS9w56ZAMpIL7XUQ41ntYdNOsJmKEigDIKIwIcK9ceBAhmyw+X5d1rXa19LhUipREOshzSojKiOdj03ztXQtgTH84TWWDf2nxtrViRiry6z6/kSvsiTMaiYYB243flIbU3uDKdoYNfwq+kGQiXyWZTSs5NFcvc6bMjj64QE1GEK1WW6nVZ+ICnJ/qAfM1y6zl0SZbzQ/n0IxNK1DaY/piBXvjl/x6ROmqYs+XNQ3bfgB7EK730Ew4ymitvovuBFB71Y03X+KNyULDBXibqWs653ut522UM5+//3sgisKX0JI/iwbVDNDVWJ8Mod1d8tqcKDV8QC+ugA3PQ+y4l7E6ZodYv2dJPk9FH2"},"1fded7898f7352d5131f5d99":{"iv":"GWKT55iWsmj2Gzi7","ct":"bia2QNQQl9ym3e5xMxZCJmkGzNM9Yaj7VpZ5ngz7UmoO2Tc6GZQ1doRwJO7zwiKfG59e7QkxPIjwDet4i6H522/z5PNpd0/M+znVrRGy9Kju2UywWlwNYRIvtZldULYxtx58FDS9GVyaWbxGSpjP+/4w+y9NJvcn3PXMlKgBhwCWexEFFZTQvQHQ7OPj3zIfNXRV/Rnm5f1OvvEM0vcGPQYJn3K6ci7q+925PJB67D2guGT3Mmt8Xj9UAyqPRgvlerHqLycIkNVLCSBF+W52cmGL0B4mhF6mUQqfk5frD5LGEYoIC9paF2Ou0FgoTI5KzVLBFolIcv7YczKALrILM3L2l+NNAvGfw82NwtgfD6OcS+RsZILXdh7HatQruuuE2VctufydDsOa0wxNJTwZGZRTqG0uKUM="},"6698341b2042332734230521":{"iv":"pE/xN/LQuOO23CWD","ct":"OEd396VJ91Z9FTRc0YbOsXHv/Jygdi90NZnMcY+gPO2yrkPzUO4S+Q6AZ/950d9fWeH3mRxWd75iRkKhqvfRIc60wqq2bcE7P1lJsZlz5qDsHWm3/Yy7qSodC1gR0nx5Zpyjt3/ioNz2tbgaQnixvrvHg1y346H/2a+F3zhJKeSOsD/gOUYNKYUCKth80wd+v4AuVwliQzWkx4etbZ7s9XXBs82/RMuGX7nhrhmuAFZLBk3korYqamaO+JogxiCdTTMf+drpeo+XYGZzYW5jaxhdk4JL5HS4im2vu2yh8N7SUq6fMuWz4io3LDZfMAZfvlZ3GZmj3kFetL+KUoqQvYLydTI+gA83OGDV9lrmDg=="},"7157a78ce49181cd014f0e0b":{"iv":"PleflF23Q5CK8Az0","ct":"fT92vk/JeehR3SwM96F6PZpb+R/z6u/punQIQno+5wOfTUlIQ1Vb5GeA1ZiVH4Yf5FDQPyILxZXlrVjJMh5zNWjGpkg4r3Qp/l3Z4VBBzOWtYAHz20le2zbtWK8Y1FsSVtKsPIlz2pl9fZBBX2nHyXAPoeTqcyaYIK+3AQhXORXa4SwoAVQ9IQ5DptymBsZrWZHVdpBQU1Sa8A6HYmFmMpZMm4FUmBT/92OJqtFe"},"5d210b9e8ef7214db7b450a4":{"iv":"Uo4AZ+QzpDeRHdLV","ct":"hoKAeU+IAUBIQHvf+Nbu0LWDgsVoe7waUd1WD8q7o4E9WULAPUNXt/G36exzVhJTPm/3DZmYsrjc3E8BytxF7UMuvOfsnb/0QfPHw//1j21b28gIegAnoiEDgWLKppul4JoDLOU4iOOeL2mg7VMSjzXI9PRo2tQl2lp0sOzX7tZNb6lcD3WzDhwyhdDubEImc+ftqGjY47jK70U3ljmzwEgzcTT/TD8w9fTpWDmYQoDsQ1mxM0N3NcMCqoNQXsc="}}}</script>
+
+<div class="wrap" id="app">
+  <div id="loginView">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div><div class="brand">수학날개</div><h1>나의 수학날개</h1><p class="sub">선생님께 받은 숫자 4자리 코드를 넣으면 내 숙제와 테스트 결과를 볼 수 있어요.</p></div>
+      <form class="login" id="loginForm">
+        <label for="code">내 코드</label>
+        <input id="code" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" placeholder="0000">
+        <p class="err" id="err" aria-live="polite"></p>
+        <button class="btn" id="go" type="submit">내 앱 열기</button>
+      </form>
+      <section><div class="shead"><h2 id="rankTitle1">숙제왕 TOP 10</h2><div class="seg" data-seg="1"><button data-rp="week" aria-pressed="false">이번 주</button><button data-rp="month" aria-pressed="true">이번 달</button></div></div><div class="card" id="rank1"></div></section>
+    </div>
+  </div>
+
+  <div id="mainView" hidden>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="me" id="me"></div>
+      <section><h2>숙제 안내</h2><div class="nlist" id="notices"></div></section>
+      <section><h2>테스트 기록</h2><div class="card" id="tests"></div></section>
+      <section><div class="shead"><h2 id="rankTitle2">숙제왕 TOP 10</h2><div class="seg" data-seg="2"><button data-rp="week" aria-pressed="false">이번 주</button><button data-rp="month" aria-pressed="true">이번 달</button></div></div><div class="card" id="rank2"></div></section>
+      <section><h2>최근 숙제</h2><div class="card" id="hw"></div></section>
+      <footer><span class="sub" id="upd"></span><button class="link" id="logout">다른 코드로 열기</button></footer>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let D={top:[],students:{}};
+try{ D=JSON.parse($("app-data").textContent); }catch(e){}
+const DOW=["일","월","화","수","목","금","토"];
+const ST={none:["미제출","--s-none","--s-none-bg"],sub:["선생님 확인 중","--s-sub","--s-sub-bg"],fix:["오답 정리하기","--s-fix","--s-fix-bg"],fixed:["확인 기다리는 중","--s-fixed","--s-fixed-bg"],done:["완료","--s-done","--s-done-bg"]};
+const month = D.month ? Number(D.month.split("-")[1]) : "";
+let period="month", ME=null;
+function titles(){ ["rankTitle1","rankTitle2"].forEach(id=>$(id).textContent=(period==="week"?"이번 주 ":(month?month+"월 ":""))+"숙제왕 TOP 10"); document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.rp===period)); }
+titles();
+document.addEventListener("click",e=>{ const b=e.target.closest(".seg [data-rp]"); if(!b) return; period=b.dataset.rp; titles(); $("rank1").innerHTML=rankHtml(null); if(ME) $("rank2").innerHTML=rankHtml(ME); });
+
+function norm(c){ return String(c||"").toUpperCase().replace(/[^0-9A-Z]/g,""); }
+function hex(b){ return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function unhex(h){ const a=new Uint8Array(h.length/2); for(let i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; }
+function unb64(s){ const b=atob(s); const a=new Uint8Array(b.length); for(let i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a; }
+let KEY=null;
+async function photoUrl(ph){
+  if(typeof ph==="string") return "/_blob/"+encodeURIComponent(ph);
+  const r=await fetch(ph.f,{cache:"force-cache"}); if(!r.ok) throw new Error("photo");
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(ph.iv)},KEY,await r.arrayBuffer());
+  return URL.createObjectURL(new Blob([pt],{type:"image/jpeg"}));
+}
+async function open(code){
+  const enc=new TextEncoder();
+  const base=await crypto.subtle.importKey("raw",enc.encode(norm(code)),"PBKDF2",false,["deriveBits"]);
+  const bits=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:unhex(D.salt),iterations:D.iter||600000},base,352));
+  const id=hex(bits.slice(0,12)); const blob=D.students&&D.students[id]; if(!blob) return null;
+  const key=await crypto.subtle.importKey("raw",bits.slice(12,44),"AES-GCM",false,["decrypt"]);
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(blob.iv)},key,unb64(blob.ct));
+  KEY=key;
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+function rankHtml(myName){
+  const top=((period==="week"?D.topWeek:D.top)||[]).filter(r=>r.points>0);
+  const rules=`<div class="rules">숙제 올리면 +1점 · 선생님 확인까지 끝나면 +2점 더 · ${period==="week"?"매주 월요일":"매달 1일"} 새로 시작</div>`;
+  if(!top.length) return `<div class="empty">${period==="week"?"이번 주":"이번 달"} 첫 숙제왕은 누구일까요?<br>숙제를 올리면 점수가 쌓여요.</div>`+rules;
+  const mine=r=>myName&&r.name===myName.name&&r.grade===myName.grade;
+  const pod=(r,c,l)=> r?`<div class="pod ${c} ${mine(r)?"mine":""}"><div class="nm">${esc(r.name)}</div><div class="blk"><b>${r.rank}</b><span>${r.points}점</span></div></div>`:`<div class="pod ${c}"></div>`;
+  let h=`<div class="podium">${pod(top[1],"p2")}${pod(top[0],"p1")}${pod(top[2],"p3")}</div>`;
+  h+=top.slice(3).map(r=>`<div class="rk ${mine(r)?"mine":""}"><div class="no">${r.rank}</div><div class="nm">${esc(r.name)}<small>${esc(r.grade||"")}</small></div><div style="font-weight:700">${r.points}점</div></div>`).join("");
+  return h+rules;
+}
+$("rank1").innerHTML=rankHtml(null);
+
+function fmtD(s){ const [y,m,d]=s.split("-").map(Number); const x=new Date(y,m-1,d); return {md:m+"/"+d, dow:DOW[x.getDay()]}; }
+
+function trendSvg(tests){
+  const pts=tests.filter(t=>t.total>0).slice(0,8).reverse();
+  if(pts.length<2) return "";
+  const W=320,H=90,L=8,R=8,T=14,B=18; const n=pts.length;
+  const x=i=>L+i*(W-L-R)/(n-1), y=p=>T+(1-p)*(H-T-B);
+  const pc=pts.map(t=>Math.max(0,Math.min(1,t.score/t.total)));
+  const line=pc.map((p,i)=>`${i?"L":"M"}${x(i).toFixed(1)} ${y(p).toFixed(1)}`).join(" ");
+  const area=line+` L${x(n-1).toFixed(1)} ${H-B} L${x(0).toFixed(1)} ${H-B} Z`;
+  const last=pc[n-1];
+  return `<div class="trend"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 테스트 점수 변화">
+    <line x1="${L}" x2="${W-R}" y1="${y(1)}" y2="${y(1)}" stroke="var(--line)" stroke-dasharray="3 4"/>
+    <line x1="${L}" x2="${W-R}" y1="${H-B}" y2="${H-B}" stroke="var(--line)"/>
+    <path d="${area}" fill="var(--accent)" opacity=".12"/>
+    <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${pc.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p).toFixed(1)}" r="${i===n-1?4.5:3}" fill="${i===n-1?"var(--accent)":"var(--surface)"}" stroke="var(--accent)" stroke-width="2"/>`).join("")}
+    <text x="${x(n-1)}" y="${y(last)-8}" text-anchor="end" font-size="11" font-weight="700" fill="var(--ink)">${Math.round(last*100)}%</text>
+    <text x="${L}" y="${H-4}" font-size="10" fill="var(--muted)">${fmtD(pts[0].date).md}</text>
+    <text x="${W-R}" y="${H-4}" font-size="10" fill="var(--muted)" text-anchor="end">${fmtD(pts[n-1].date).md}</text>
+  </svg></div>`;
+}
+
+function renderMain(p){
+  const first=p.name.length>2?p.name.slice(1):p.name;
+  ME=p;
+  const wr=p.weekRank, wp=p.weekPoints||0;
+  const cheer = wr&&wr<=10 ? `이번 주 숙제왕 ${wr}위! 이대로 계속 가 보자 👏` : p.rank&&p.rank<=10 ? `이번 달 숙제왕 ${p.rank}위! 이번 주도 힘내 보자 👏` : (wp||p.points) ? `TOP 10까지 조금만 더! 숙제를 올리고 오답까지 끝내면 점수가 쑥쑥 올라요.` : `이번 주 첫 숙제를 올려서 점수를 시작해 보자!`;
+  $("me").innerHTML=`<div class="hi">${esc(first)}의 수학날개</div><div class="gr">${esc(p.name)} · ${esc(p.grade||"")}${p.className?" · "+esc(p.className):""}</div>
+    <div class="stat"><span class="k">이번 주 ${wp}점</span><span class="v">${wr?wr+"<small>위</small>":"–"}</span></div>
+    <div class="stat" style="text-align:right"><span class="k">${month?month+"월 ":"이번 달 "}${p.points}점</span><span class="v">${p.rank?p.rank+"<small>위</small>":"–"}</span></div>
+    <div class="cheer">${esc(cheer)}</div>`;
+  const nts=(p.notices||[]);
+  const tdy=D.updated?D.updated.slice(0,10):"";
+  $("notices").innerHTML = nts.length ? nts.map((n,i)=>{const d=fmtD(n.date); return `<div class="notice ${i>0&&n.date<tdy?"old":""}"><div class="nd">${d.md}(${d.dow}) ${n.date>=tdy?`<span class="today">새 숙제</span>`:""}${n.cls?" · "+esc(n.cls):""}</div><div class="nt">${esc(n.text)}</div></div>`}).join("")
+    : `<div class="card"><div class="empty">아직 받은 숙제 안내가 없어요.</div></div>`;
+  const tests=(p.tests||[]);
+  let lastD=null;
+  $("tests").innerHTML = tests.length ? trendSvg(tests)+tests.map((t,ti)=>{const d=fmtD(t.date); const has=t.total>0; const pc=has?Math.round(t.score/t.total*100):null; const ph=(t.photos||[]);
+      const hdr = t.date!==lastD ? `<div class="dgrp">${d.md.replace("/","월 ")}일 (${d.dow})</div>` : ""; lastD=t.date;
+      return hdr+`<div class="test ${ph.length?"has-photo":""}" data-ti="${ti}" ${ph.length?`role="button" tabindex="0" aria-expanded="false"`:""}><div class="tt">${esc(t.title||"테스트")}</div><div class="sc">${esc(t.score??"")}${has?`<small>/${esc(t.total)}</small>`:""}</div><div class="dt">${d.md}(${d.dow})</div>${has?`<div class="meter"><i style="width:${pc}%"></i></div>`:""}${t.memo?`<div class="cm">${esc(t.memo)}</div>`:""}${ph.length?`<div class="ph">시험지 사진 ${ph.length}장 보기 ▾</div><div class="photos" hidden></div>`:""}</div>`}).join("")
+    : `<div class="empty">아직 테스트 기록이 없어요.<br>선생님이 결과를 올리면 여기에 쌓여요.</div>`;
+  $("rank2").innerHTML=rankHtml(p);
+  $("tests").onclick=e=>{ const el=e.target.closest(".test.has-photo"); if(!el) return; const t=tests[+el.dataset.ti]; const box=el.querySelector(".photos"); const open=box.hidden;
+    if(open&&!box.childElementCount){ box.innerHTML=`<p class="sub">사진 여는 중…</p>`;
+      Promise.all((t.photos||[]).map(ph=>photoUrl(ph).catch(()=>null))).then(urls=>{ box.innerHTML=urls.map((u,i)=>u?`<img src="${u}" alt="${esc(t.title)} 시험지 ${i+1}">`:`<p class="sub">사진 ${i+1}을 열 수 없어요.</p>`).join(""); }); }
+    box.hidden=!open; el.setAttribute("aria-expanded",open); el.querySelector(".ph").textContent=`시험지 사진 ${t.photos.length}장 ${open?"접기 ▴":"보기 ▾"}`; };
+  const hw=(p.homework||[]);
+  $("hw").innerHTML = hw.length ? hw.map(r=>{const d=fmtD(r.date); const s=ST[r.status]||ST.none;
+      return `<div class="hw"><div class="dt">${d.md}<small>${d.dow}요일</small></div><div><span class="pill" style="color:var(${s[1]});background:var(${s[2]})">${s[0]}</span>${r.memo?`<div class="fb">${esc(r.memo)}</div>`:""}</div></div>`}).join("")
+    : `<div class="empty">아직 숙제 기록이 없어요.</div>`;
+  $("upd").textContent = D.updated ? D.updated+" 기준 · 매일 밤 업데이트" : "";
+  $("loginView").hidden=true; $("mainView").hidden=false; window.scrollTo(0,0);
+}
+
+async function tryCode(code,silent){
+  if(norm(code).length!==4){ if(!silent) $("err").textContent="숫자 4자리를 넣어 주세요."; return; }
+  $("go").disabled=true; $("go").textContent="여는 중…"; $("err").textContent="";
+  try{
+    const p=await open(code);
+    if(!p){ if(!silent) $("err").textContent="코드가 맞지 않아요. 선생님께 받은 코드를 다시 확인해 주세요."; try{ if(silent) localStorage.removeItem("sn-code"); }catch(e){} return; }
+    try{ localStorage.setItem("sn-code",norm(code)); }catch(e){}
+    renderMain(p);
+  }catch(e){ if(!silent) $("err").textContent="열 수 없어요. 잠시 후 다시 해 주세요."; }
+  finally{ $("go").disabled=false; $("go").textContent="내 앱 열기"; }
+}
+$("loginForm").addEventListener("submit",e=>{ e.preventDefault(); tryCode($("code").value,false); });
+$("logout").onclick=()=>{ try{ localStorage.removeItem("sn-code"); }catch(e){} $("code").value=""; $("mainView").hidden=true; $("loginView").hidden=false; };
+try{ const c=localStorage.getItem("sn-code"); if(c) tryCode(c,true); }catch(e){}
+})();
+</script>
+</body></html>
