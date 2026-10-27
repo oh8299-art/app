@@ -19,6 +19,8 @@ const WEEK = day(-((new Date(nowK).getUTCDay() + 6) % 7));
 const from = day(-35);
 const students = load("students").filter(s => s.active !== false);
 const tests = load("tests");
+const materials = load("materials");
+const matIds = s => materials.filter(m => m.sid === s.id).flatMap(m => Array.isArray(m.files) ? m.files.filter(f => f && typeof f.id === "string").map(f => f.id) : []);
 const photoName = (keyBytes, assetId) => "p/" + createHash("sha256").update(Buffer.from(keyBytes)).update(":" + assetId).digest("hex").slice(0, 24) + ".bin";
 async function keysFor(code) {
   const base = await C.subtle.importKey("raw", enc.encode(norm(code)), "PBKDF2", false, ["deriveBits"]);
@@ -33,8 +35,8 @@ const photoIds = s => tests.filter(t => t.sid === s.id).flatMap(t => Array.isArr
 
 if (MISSING) {
   const need = new Set();
-  for (const s of coded) { const ids = photoIds(s); if (!ids.length) continue; const k = await keysFor(s.code);
-    for (const a of ids) if (!fs.existsSync(path.join(repo, photoName(k.raw, a)))) need.add(a); }
+  for (const s of coded) { const ids = photoIds(s); if (!ids.length && !matIds(s).length) continue; const k = await keysFor(s.code);
+    for (const a of ids.concat(matIds(s))) if (!fs.existsSync(path.join(repo, photoName(k.raw, a)))) need.add(a); }
   console.log(JSON.stringify([...need])); process.exit(0);
 }
 
@@ -58,17 +60,25 @@ const findPhoto = a => { if (!photosDir || !fs.existsSync(photosDir)) return nul
 const blobs = {}, keep = new Set(); let missingPhotos = 0;
 for (const s of coded) {
   const k = await keysFor(s.code), m = M.by[s.id], w = W.by[s.id];
-  const encPhoto = async a => {
+  const encPhoto = async (a, type) => {
     const name = photoName(k.raw, a), dest = path.join(repo, name);
     const iv = createHash("sha256").update(Buffer.from(k.raw)).update(":iv:" + a).digest().subarray(0, 12);
     if (!fs.existsSync(dest)) { const src = findPhoto(a); if (!src) { missingPhotos++; return null; }
       const ct = new Uint8Array(await C.subtle.encrypt({ name: "AES-GCM", iv }, k.key, fs.readFileSync(src))); fs.writeFileSync(dest, ct); }
-    keep.add(name); return { f: name, iv: Buffer.from(iv).toString("base64") };
+    keep.add(name); const o = { f: name, iv: Buffer.from(iv).toString("base64") }; if (type && type !== "image/jpeg") o.t = type; return o;
   };
   const myTests = tests.filter(t => t.sid === s.id && t.date).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 60);
   const testsOut = [];
   for (const t of myTests) { const ph = []; for (const a of (Array.isArray(t.photos) ? t.photos : [])) { if (typeof a !== "string") continue; const r = await encPhoto(a); if (r) ph.push(r); }
     testsOut.push({ date: t.date, title: t.title || "", score: t.score ?? "", total: Number(t.total) || 0, memo: t.memo || "", photos: ph }); }
+  const matsOut = [];
+  for (const m of materials.filter(m => m.sid === s.id && m.date).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 60)) {
+    const files = [];
+    for (const f of (Array.isArray(m.files) ? m.files : [])) { if (!f || typeof f.id !== "string") continue;
+      const type = f.type === "application/pdf" ? "application/pdf" : "image/jpeg";
+      const r = await encPhoto(f.id, type); if (r) { r.t = type; r.n = String(f.name || "").slice(0, 120); files.push(r); } }
+    matsOut.push({ date: m.date, title: m.title || "", memo: m.memo || "", files });
+  }
   const payload = { name: s.name, grade: s.grade || "", className: classes[s.classId] || "",
     points: m.points, done: m.done, rank: m.rank, weekPoints: w.points, weekRank: w.rank,
     notices: notices.filter(n => n.classId === "all" || (s.classId && n.classId === s.classId))
@@ -76,7 +86,7 @@ for (const s of coded) {
       .map(n => ({ date: n.date, text: n.text, cls: n.classId === "all" ? "전체" : (classes[n.classId] || "") })),
     homework: records.filter(x => x.sid === s.id && x.date >= from && x.status && x.status !== "skip").sort((a, b) => a.date < b.date ? 1 : -1)
       .map(x => ({ date: x.date, status: x.status, memo: x.memo || "" })),
-    tests: testsOut };
+    tests: testsOut, materials: matsOut };
   const iv = C.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await C.subtle.encrypt({ name: "AES-GCM", iv }, k.key, enc.encode(JSON.stringify(payload))));
   blobs[k.id] = { iv: Buffer.from(iv).toString("base64"), ct: Buffer.from(ct).toString("base64") };
