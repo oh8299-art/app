@@ -2,6 +2,7 @@
  * 수학날개 숙제체크 서버 (구글 Apps Script)
  * 1) 이 파일 전체를 복사해서 Apps Script 의 Code.gs 에 붙여 넣으세요.
  * 2) 아래 OWNER_CODE 의 "0000" 을 원장님 코드 4자리로 바꾸세요.
+ * (시트에서 열지 않고 script.google.com 에서 새 프로젝트로 만들어도 됩니다 — 시트가 자동으로 만들어져요)
  */
 
 // 원장님 코드 — 따옴표 안의 0000 을 원장님 코드로 바꾸세요
@@ -191,7 +192,7 @@ var SHEET_NAMES = { students: "학생", records: "숙제기록", classes: "반",
 var STATUS_KO = { none: "미제출", sub: "제출(피드백 대기)", fix: "오답 정리 중", fixed: "확인 대기", done: "완료", skip: "숙제 없음" };
 
 function makeStore_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = sheetFile_();
   var memo = {}, rowsOf = {};
   function sheet(col) {
     var name = SHEET_NAMES[col];
@@ -251,6 +252,15 @@ function makeStore_() {
     withLock: function (fn) { var l = LockService.getScriptLock(); l.waitLock(25000); try { return fn(); } finally { SpreadsheetApp.flush(); l.releaseLock(); } }
   };
   return store;
+}
+
+function sheetFile_() {
+  var ss = null; try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) {}
+  if (ss) return ss;
+  var p = PropertiesService.getScriptProperties(), id = p.getProperty("SHEET_ID");
+  if (id) { try { return SpreadsheetApp.openById(id); } catch (e) {} }
+  ss = SpreadsheetApp.create("수학날개 숙제체크");
+  p.setProperty("SHEET_ID", ss.getId()); return ss;
 }
 
 function folder_() {
