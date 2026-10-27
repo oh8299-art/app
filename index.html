@@ -101,6 +101,19 @@ section{display:flex;flex-direction:column;gap:10px}
 .test.has-photo{cursor:pointer}
 .test .ph{grid-column:1/-1;font-size:12px;color:var(--accent);font-weight:600}
 .photos{grid-column:1/-1;display:flex;flex-direction:column;gap:8px}
+.fee{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:14px 16px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.card .fee:first-child{border-top:0}
+.fee .ft{font-weight:700}
+.fee .fd{font-size:12px;color:var(--muted)}
+.fee .amt{font-family:var(--f-display);font-size:26px;line-height:1;text-align:right;grid-row:1/3;grid-column:2}
+.fee .st{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
+.fee .st .chk{width:22px;height:22px;border-radius:6px;border:2px solid var(--s-fix);display:inline-grid;place-items:center;font-size:14px;line-height:1}
+.fee.unpaid{background:var(--s-fix-bg)}
+.fee.unpaid .st{color:var(--s-fix)}
+.fee.paid .st{color:var(--s-done)}
+.fee.paid .st .chk{border-color:var(--s-done);background:var(--s-done);color:#fff}
+.fee.paid .amt{color:var(--muted)}
+.fee .fm{grid-column:1/-1;font-size:13px;background:var(--surface);border-radius:8px;padding:7px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
 .mat{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}
 .card .mat:first-child,.dgrp+.mat{border-top:0}
 .mat .tt{font-weight:700}
@@ -138,6 +151,7 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fle
   <div id="mainView" hidden>
     <div style="display:flex;flex-direction:column;gap:20px">
       <div class="me" id="me"></div>
+      <section id="feeSec" hidden><h2>교재비</h2><div class="card" id="fees"></div></section>
       <section><h2>숙제 안내</h2><div class="nlist" id="notices"></div></section>
       <section><h2>테스트 기록</h2><div class="card" id="tests"></div></section>
       <section><h2>자료</h2><div class="card" id="mats"></div></section>
@@ -221,6 +235,13 @@ function renderMain(p){
     <div class="stat"><span class="k">이번 주 ${wp}점</span><span class="v">${wr?wr+"<small>위</small>":"–"}</span></div>
     <div class="stat" style="text-align:right"><span class="k">${month?month+"월 ":"이번 달 "}${p.points}점</span><span class="v">${p.rank?p.rank+"<small>위</small>":"–"}</span></div>
     <div class="cheer">${esc(cheer)}</div>`;
+  const fz=(p.fees||[]).slice().sort((a,b)=>(a.paid?1:0)-(b.paid?1:0)||(a.date<b.date?1:-1)).slice(0,6);
+  $("feeSec").hidden=!fz.length;
+  $("fees").innerHTML=fz.map(f=>{ const d=f.date?fmtD(f.date):null; const pd=f.paid&&f.paidAt?new Date(f.paidAt):null;
+    return `<div class="fee ${f.paid?"paid":"unpaid"}"><div class="ft">${esc(f.title||"교재비")}</div><div class="amt">${(Number(f.amount)||0).toLocaleString("ko-KR")}<small style="font-family:var(--f-body);font-size:13px">원</small></div>
+      <div class="fd">${d?d.md+"("+d.dow+") 안내":""}</div>
+      <div class="st"><span class="chk" aria-hidden="true">${f.paid?"✓":""}</span>${f.paid?`교재비 완납${pd?` · ${pd.getMonth()+1}/${pd.getDate()}`:""}`:"입금 전이에요 · 부모님께 알려 주세요"}</div>
+      ${!f.paid&&f.memo?`<div class="fm">${esc(f.memo)}</div>`:""}</div>`; }).join("");
   const nts=(p.notices||[]);
   const tdy=D.updated?D.updated.slice(0,10):"";
   $("notices").innerHTML = nts.length ? nts.map((n,i)=>{const d=fmtD(n.date); return `<div class="notice ${i>0&&n.date<tdy?"old":""}"><div class="nd">${d.md}(${d.dow}) ${n.date>=tdy?`<span class="today">새 숙제</span>`:""}${n.cls?" · "+esc(n.cls):""}</div><div class="nt">${esc(n.text)}</div></div>`}).join("")

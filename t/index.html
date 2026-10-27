@@ -147,6 +147,27 @@ tr:last-child td{border-bottom:0}
 .thumbs a{display:block;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)}
 .thumbs img{width:100%;height:100%;object-fit:cover;display:block}
 .tform .file{grid-column:1/-1;font-size:13px;color:var(--muted)}
+.feebox{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--s-fix);border-radius:0 var(--r) var(--r) 0;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.feebox h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+.feebox h3 .cnt{font-size:12px;background:var(--s-fix-bg);color:var(--s-fix);border-radius:999px;padding:2px 9px}
+.feerow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px;align-items:center;font-size:14px;font-variant-numeric:tabular-nums;padding:6px 0;border-top:1px dashed var(--line)}
+.feerow:first-of-type{border-top:0}
+.feerow small{color:var(--muted)}
+.feerow b{white-space:nowrap}
+.paidchk{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.paidchk input{width:20px;height:20px;accent-color:var(--s-done)}
+.feerow.paid b{color:var(--s-done)}
+.feerow.paid .ft{color:var(--muted);text-decoration:line-through}
+.mrow{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;font-variant-numeric:tabular-nums}
+.mrow .mn{font-weight:700}
+.mrow .mn small{font-weight:400;color:var(--muted);margin-left:6px}
+.mrow .mc{font-family:var(--f-display);font-size:24px;color:#d0453b;text-align:right}
+.mrow .mc small{font-family:var(--f-body);font-size:12px;color:var(--muted);margin-left:2px}
+.mrow .md{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px}
+.mrow .md button{border:0;border-radius:7px;padding:3px 8px;font:600 12px var(--f-body);cursor:pointer;background:var(--s-none-bg);color:var(--ink)}
+.mrow .md button.fx{background:var(--s-fix-bg)}
+.mrow .mb{grid-column:1/-1;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;display:flex}
+.mrow .mb i{display:block;height:100%}
 .ftile{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:12px;text-decoration:none;max-width:100%}
 .ftile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
 .wrap.locked header .tabs,.wrap.locked header .scope,.wrap.locked > section:not(#v-login){display:none!important}
@@ -234,6 +255,18 @@ tr:last-child td{border-bottom:0}
 
   <section id="v-week" hidden>
     <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="seg" id="weekSeg" style="align-self:flex-start"><button data-wv="grid" aria-pressed="true">주간 표</button><button data-wv="miss" aria-pressed="false">이번 달 미제출</button></div>
+      <div id="missView" hidden style="display:flex;flex-direction:column;gap:12px">
+        <div class="weekhead">
+          <button class="iconbtn" id="prevMonth" aria-label="이전 달">‹</button>
+          <div class="d" id="monthLabel"></div>
+          <button class="iconbtn" id="nextMonth" aria-label="다음 달">›</button>
+        </div>
+        <div class="summary" id="missSum"></div>
+        <div class="list" id="missList"></div>
+        <p class="hint" id="missHint"></p>
+      </div>
+      <div id="gridView" style="display:flex;flex-direction:column;gap:12px">
       <div class="weekhead">
         <button class="iconbtn" id="prevWeek" aria-label="이전 주">‹</button>
         <div class="d" id="weekLabel"></div>
@@ -242,6 +275,7 @@ tr:last-child td{border-bottom:0}
       <div class="legend" id="legend"></div>
       <div class="gridwrap"><table id="grid"></table></div>
       <p class="hint">칸을 누르면 그날 체크 화면으로 이동해요. 완료율 = 완료 ÷ 숙제 있는 날 (이번 주).</p>
+      </div>
     </div>
   </section>
 
@@ -280,6 +314,20 @@ tr:last-child td{border-bottom:0}
           <input type="file" id="importFile" accept="application/json,.json">
         </details>
       </form>
+      <div class="feebox" id="feeBox">
+        <h3>교재비 <span class="cnt" id="feeCnt"></span></h3>
+        <div id="feeUnpaid"></div>
+        <details id="feeClassDet"><summary class="hint" style="cursor:pointer;font-size:13px">반 전체에 교재비 안내하기</summary>
+          <form class="tform" id="feeClassForm" style="margin-top:8px">
+            <select class="w2 tsel" id="fcClass" aria-label="반" style="max-width:none"></select>
+            <input class="w2" id="fcTitle" placeholder="항목 (예: 11월 교재비)" aria-label="항목" required>
+            <input class="w2" id="fcAmount" inputmode="numeric" placeholder="금액 (원)" aria-label="금액" required>
+            <input class="w2" id="fcMemo" placeholder="메모 (예: 입금 계좌)" aria-label="메모">
+            <button class="act w4" type="submit">반 학생 모두에게 안내</button>
+          </form>
+          <p class="hint">학생마다 금액이 다르면 아래 학생 칸의 '교재비' 버튼으로 따로 안내하세요.</p>
+        </details>
+      </div>
       <form class="form" id="classForm">
         <h3>반 만들기</h3>
         <div class="frow"><input id="newClass" placeholder="반 이름 (예: 월수금 4학년반)" autocomplete="off" required><button class="act" type="submit" style="flex:0 0 auto">만들기</button></div>
@@ -500,7 +548,51 @@ function undoStatus(sid){
 }
 
 /* ---------- week view ---------- */
+let weekMode="grid", missMonth=TODAY.slice(0,7);
+function monthMiss(){
+  const [y,m]=missMonth.split("-").map(Number); const first=missMonth+"-01"; const last=ymd(new Date(y,m,0));
+  const end = last<TODAY ? last : addDays(TODAY,-1) < first ? TODAY : addDays(TODAY,-1); // 오늘은 아직 낼 수 있으니 어제까지
+  const allDates=Object.values(recs).map(r=>r.date).filter(Boolean).sort();
+  const appStart=allDates[0]||TODAY;
+  const rows=scoped().map(s=>{
+    const join = s.order>1e12 ? ymd(new Date(s.order)) : first;
+    let d = [first, appStart, join].sort().pop();
+    let due=0, sub=0; const miss=[], fix=[];
+    for(; d<=end; d=addDays(d,1)){
+      const r=recs[rid(d,s.id)]; const st=r?.status||"none";
+      if(st==="skip") continue;
+      if(!dueOn(s,d)&&!r) continue;
+      due++;
+      if(st==="none") miss.push(d); else { sub++; if(st==="fix"||st==="fixed") fix.push(d); }
+    }
+    return {s,due,sub,miss,fix};
+  });
+  return {rows, first, end, appStart};
+}
+function renderMiss(){
+  const [y,m]=missMonth.split("-").map(Number);
+  $("monthLabel").textContent=`${y}년 ${m}월`;
+  const {rows,end,appStart}=monthMiss();
+  const has=rows.filter(r=>r.miss.length||r.fix.length).sort((a,b)=>b.miss.length-a.miss.length||b.fix.length-a.fix.length||a.s.name.localeCompare(b.s.name));
+  const totMiss=rows.reduce((a,r)=>a+r.miss.length,0), totDue=rows.reduce((a,r)=>a+r.due,0);
+  const perfect=rows.filter(r=>r.due&&!r.miss.length).length;
+  $("missSum").innerHTML=`<div class="chips"><span class="chip">미제출 학생 <b>${rows.filter(r=>r.miss.length).length}명</b></span><span class="chip">미제출 <b>${totMiss}회</b> / 숙제 ${totDue}회</span><span class="chip">오답 미완료 <b>${rows.reduce((a,r)=>a+r.fix.length,0)}건</b></span><span class="chip">빠짐없이 낸 학생 <b>${perfect}명</b></span></div>
+    <div class="rowtools"><button class="ghost" id="copyMiss">미제출 명단 복사</button></div>`;
+  const md=d=>{ const x=parse(d); return (x.getMonth()+1)+"/"+x.getDate(); };
+  $("missList").innerHTML = has.length ? has.map(r=>{ const rate=r.due?Math.round(r.sub/r.due*100):0;
+    return `<div class="mrow"><div class="mn">${esc(r.s.name)}<small>${esc(r.s.grade||"")}${className(r.s.classId)?" · "+esc(className(r.s.classId)):""}</small></div>
+      <div class="mc">${r.miss.length}<small>회 미제출</small></div>
+      <div class="mb"><i style="width:${rate}%;background:var(--s-done)"></i><i style="width:${100-rate}%;background:var(--s-none)"></i></div>
+      <div class="md">${r.miss.map(d=>`<button data-go="${d}" data-sid="${r.s.id}" title="이날로 가기">${md(d)} 미제출</button>`).join("")}${r.fix.map(d=>`<button class="fx" data-go="${d}" data-sid="${r.s.id}">${md(d)} 오답 미완료</button>`).join("")}</div></div>`; }).join("")
+    : `<div class="empty">${rows.length?"이번 달 미제출 학생이 없어요. 모두 잘하고 있어요! 👏":"학생을 추가하면 보여요."}</div>`;
+  $("missHint").textContent=`제출률 막대 = 낸 날 ÷ 숙제 있는 날. ${end<TODAY?"":"오늘 숙제는 아직 낼 수 있어서 어제까지만 셌어요. "}숙제체크 앱 기록이 시작된 ${md(appStart)}부터, 새로 온 학생은 등록한 날부터 세요. 날짜를 누르면 그날 체크 화면으로 가요.`;
+  $("copyMiss").onclick=()=>{ if(!has.filter(r=>r.miss.length).length) return toast("미제출 학생이 없어요");
+    copyText(`[${m}월 숙제 미제출]\n`+has.filter(r=>r.miss.length).map(r=>`${r.s.name} ${r.miss.length}회 (${r.miss.map(md).join(", ")})`).join("\n")); };
+}
 function renderWeek(){
+  [...$("weekSeg").children].forEach(b=>b.setAttribute("aria-pressed",b.dataset.wv===weekMode));
+  $("missView").hidden=weekMode!=="miss"; $("gridView").hidden=weekMode!=="grid";
+  if(weekMode==="miss") return renderMiss();
   const days=[0,1,2,3,4,5].map(i=>addDays(weekStart,i));
   const a=parse(days[0]), b=parse(days[5]);
   $("weekLabel").textContent=`${a.getMonth()+1}/${a.getDate()} – ${b.getMonth()+1}/${b.getDate()}`;
@@ -528,6 +620,7 @@ function renderWeek(){
 /* ---------- students view ---------- */
 function daysHtml(sel,attr){ return [1,2,3,4,5,6,0].map(n=>`<button type="button" ${attr}="${n}" aria-pressed="${sel.includes(n)}">${DOW[n]}</button>`).join(""); }
 function renderStudents(){
+  renderFees();
   $("newDays").innerHTML=daysHtml(newDays,"data-nd");
   const act=scoped();
   const opts=teacherIds();
@@ -545,13 +638,46 @@ function renderStudents(){
         ${s.code?`<span class="code">${esc(s.code)}</span><button class="ghost" data-code="copy">코드 보내기 복사</button>`:`<button class="ghost" data-code="new">학생 코드 만들기</button>`}
         <button class="ghost" data-tests="${s.id}" aria-expanded="${openTests===s.id}">테스트 기록 ${tests.filter(t=>t.sid===s.id).length}</button>
         <button class="ghost" data-mats="${s.id}" aria-expanded="${openMats===s.id}">자료 ${materials.filter(m=>m.sid===s.id).length}</button>
+        ${(()=>{ const u=fees.filter(f=>f.sid===s.id&&!f.paid).length; return `<button class="ghost" data-fees="${s.id}" aria-expanded="${openFees===s.id}" ${u?'style="border-color:var(--s-fix);color:var(--s-fix)"':""}>교재비${u?" 미납 "+u:""}</button>`; })()}
         <span style="flex:1"></span>
         ${pendingDel===s.id?`<button class="danger" data-del="yes">정말 삭제</button><button class="ghost" data-del="no">취소</button>`:`<button class="danger" data-del="ask">삭제</button>`}
       </div>
-      ${openTests===s.id?testPanel(s):""}${openMats===s.id?matPanel(s):""}
+      ${openTests===s.id?testPanel(s):""}${openMats===s.id?matPanel(s):""}${openFees===s.id?feePanel(s):""}
     </div>`) : `<div class="empty">${loaded?"등록된 학생이 없어요. 위에서 추가해 주세요.":"불러오는 중…"}</div>`;
 }
-let pendingDel=null, openTests=null, tests=[], openMats=null, materials=[];
+let pendingDel=null, openTests=null, tests=[], openMats=null, materials=[], openFees=null, fees=[];
+const won=n=>(Number(n)||0).toLocaleString("ko-KR")+"원";
+const thisMonthFee=()=>`${parse(TODAY).getMonth()+1}월 교재비`;
+function lastFeeMemo(){ try{ return localStorage.getItem("hc-feememo")||""; }catch(e){ return ""; } }
+function feeRow(f,showName){ const st=students.find(x=>x.id===f.sid); const d=f.date?parse(f.date):null;
+  return `<div class="feerow ${f.paid?"paid":""}"><label class="paidchk"><input type="checkbox" data-fpaid="${f.id}" ${f.paid?"checked":""}>완납</label>
+    <div style="min-width:0"><span class="ft">${showName&&st?`<b style="font-weight:700">${esc(st.name)}</b> · `:""}${esc(f.title||"교재비")}</span> <small>${d?(d.getMonth()+1)+"/"+d.getDate()+" 안내":""}${f.paid&&f.paidAt?" · "+fmtTime(f.paidAt)+" 완납":""}${f.memo?" · "+esc(f.memo):""}</small></div>
+    <b>${won(f.amount)}</b><button class="danger" data-fdel="${f.id}" aria-label="삭제">삭제</button></div>`; }
+function feePanel(s){
+  const list=fees.filter(f=>f.sid===s.id).sort((a,b)=>(a.paid?1:0)-(b.paid?1:0)||(a.date<b.date?1:-1));
+  return `<div class="tpanel">
+    <form class="tform" data-fform="${s.id}">
+      <input class="w2" id="fft-${s.id}" value="${esc(thisMonthFee())}" placeholder="항목 (예: 11월 교재비)" aria-label="항목" required>
+      <input class="w2" id="ffa-${s.id}" inputmode="numeric" placeholder="금액 (원)" aria-label="금액" required>
+      <input class="w4" id="ffm-${s.id}" value="${esc(lastFeeMemo())}" placeholder="메모 (예: 입금 계좌) — 학생 앱에 보여요" aria-label="메모">
+      <button class="act w4" type="submit">교재비 안내하기</button>
+    </form>
+    ${list.length?list.map(f=>feeRow(f,false)).join(""):`<p class="hint">아직 안내한 교재비가 없어요.</p>`}
+  </div>`;
+}
+function renderFees(){
+  const box=$("feeBox"); if(!box) return;
+  const ids=new Set(scoped().map(s=>s.id));
+  const unpaid=fees.filter(f=>!f.paid&&ids.has(f.sid)).sort((a,b)=>a.date<b.date?-1:1);
+  const total=unpaid.reduce((a,f)=>a+(Number(f.amount)||0),0);
+  $("feeCnt").textContent = unpaid.length?`미납 ${unpaid.length}명 · ${won(total)}`:"미납 없음";
+  if(!(document.activeElement&&document.activeElement.closest("#feeUnpaid"))) $("feeUnpaid").innerHTML = unpaid.length?unpaid.map(f=>feeRow(f,true)).join(""):`<p class="hint">안내한 교재비가 모두 완납됐어요. 새로 안내하려면 아래 '반 전체에 안내하기'나 학생 칸의 '교재비' 버튼을 쓰세요.</p>`;
+  const cls=myClasses(); const cur=$("fcClass").value;
+  $("fcClass").innerHTML=cls.map(c=>`<option value="${c.id}">${esc(c.name)} (${students.filter(x=>x.active!==false&&x.classId===c.id).length}명)</option>`).join("")||`<option value="">먼저 반을 만들어 주세요</option>`;
+  if(cur&&[...$("fcClass").options].some(o=>o.value===cur)) $("fcClass").value=cur;
+  if(!$("fcTitle").value) $("fcTitle").value=thisMonthFee();
+  if(!$("fcMemo").value) $("fcMemo").value=lastFeeMemo();
+}
 function fileTile(f,label){ const pdf=f.type==="application/pdf"; return pdf?`<a class="ftile" href="#" data-fopen="${esc(f.id)}">📄 <span>${esc(f.name||label||"PDF")}</span></a>`:`<a href="#" data-fopen="${esc(f.id)}" style="display:block;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)"><img data-fid="${esc(f.id)}" alt="${esc(f.name||label||"사진")}" style="width:100%;height:100%;object-fit:cover"></a>`; }
 function matPanel(s){
   const list=materials.filter(m=>m.sid===s.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0));
@@ -665,6 +791,10 @@ function goDay(d,sid){ day=d; ensureRange(d); filter="all"; show("day"); if(sid)
 $("prevDay").onclick=()=>{ day=addDays(day,-1); ensureRange(day); render(); };
 $("nextDay").onclick=()=>{ day=addDays(day,1); render(); };
 $("goToday").onclick=()=>{ day=TODAY; render(); };
+$("weekSeg").addEventListener("click",e=>{ const b=e.target.closest("[data-wv]"); if(!b) return; weekMode=b.dataset.wv; renderWeek(); });
+$("prevMonth").onclick=()=>{ const [y,m]=missMonth.split("-").map(Number); const d=new Date(y,m-2,1); missMonth=ymd(d).slice(0,7); renderWeek(); };
+$("nextMonth").onclick=()=>{ const [y,m]=missMonth.split("-").map(Number); const d=new Date(y,m,1); const nm=ymd(d).slice(0,7); if(nm<=TODAY.slice(0,7)){ missMonth=nm; renderWeek(); } };
+$("missList").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b) goDay(b.dataset.go,b.dataset.sid); });
 $("prevWeek").onclick=()=>{ weekStart=addDays(weekStart,-7); ensureRange(weekStart); render(); };
 $("nextWeek").onclick=()=>{ weekStart=addDays(weekStart,7); render(); };
 
@@ -694,7 +824,36 @@ $("addForm").addEventListener("submit",async e=>{
   if(tid) data.teacherId=tid;
   try{ await db.collection("students").doc(id).set(data); $("newName").value=""; $("newGrade").value=""; toast(name+" 추가했어요 · 학생 앱에서 바로 열려요"); }catch(err){ handleWriteErr(err); }
 });
+async function addFee(sid,title,amount,memo){ const data={sid,date:TODAY,title,amount,memo,paid:false,createdAt:Date.now()}; if(me) data.by=me; await db.collection("s_fees").add(data); }
+function parseWon(v){ return Number(String(v||"").replace(/[^0-9]/g,""))||0; }
+$("feeClassForm").addEventListener("submit",async e=>{ e.preventDefault();
+  const cid=$("fcClass").value, title=$("fcTitle").value.trim(), amount=parseWon($("fcAmount").value), memo=$("fcMemo").value.trim();
+  if(!cid) return toast("먼저 반을 만들어 주세요"); if(!amount) return toast("금액을 숫자로 넣어 주세요");
+  const list=students.filter(x=>x.active!==false&&x.classId===cid); if(!list.length) return toast("이 반에 학생이 없어요");
+  try{ localStorage.setItem("hc-feememo",memo); }catch(_){}
+  const b=e.target.querySelector("button[type=submit]"); b.disabled=true;
+  try{ for(let i=0;i<list.length;i++){ b.textContent=`안내 중 ${i+1}/${list.length}…`; await addFee(list[i].id,title,amount,memo); }
+    toast(`${className(cid)} ${list.length}명에게 ${won(amount)} 안내했어요`); $("fcAmount").value=""; }
+  catch(err){ handleWriteErr(err); }
+  b.disabled=false; b.textContent="반 학생 모두에게 안내"; });
+function onFeeChange(e){ const c=e.target.closest("[data-fpaid]"); if(!c) return false;
+  if(!db||!canWrite){ toast("보기 전용이에요"); return true; }
+  const id=c.dataset.fpaid, paid=c.checked;
+  db.collection("s_fees").doc(id).update(paid?{paid:true,paidAt:Date.now()}:{paid:false,paidAt:null}).then(()=>toast(paid?"완납으로 표시했어요":"미납으로 되돌렸어요")).catch(handleWriteErr);
+  return true; }
+async function onFeeDel(e){ const d=e.target.closest("[data-fdel]"); if(!d) return false;
+  if(d.dataset.confirm!=="1"){ d.dataset.confirm="1"; d.textContent="정말 삭제"; setTimeout(()=>{ d.dataset.confirm=""; d.textContent="삭제"; },3000); return true; }
+  try{ await db.collection("s_fees").doc(d.dataset.fdel).delete(); toast("교재비 안내를 지웠어요"); }catch(err){ handleWriteErr(err); } return true; }
+$("feeUnpaid").addEventListener("change",onFeeChange);
+$("feeUnpaid").addEventListener("click",e=>{ onFeeDel(e); });
 $("slist").addEventListener("submit",async e=>{
+  const ff=e.target.closest("[data-fform]");
+  if(ff){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
+    const sid=ff.dataset.fform, title=$("fft-"+sid).value.trim(), amount=parseWon($("ffa-"+sid).value), memo=$("ffm-"+sid).value.trim();
+    if(!amount) return toast("금액을 숫자로 넣어 주세요");
+    try{ localStorage.setItem("hc-feememo",memo); }catch(_){}
+    try{ await addFee(sid,title||"교재비",amount,memo); toast(`${won(amount)} 안내했어요 · 학생 앱에 바로 보여요`); $("ffa-"+sid).value=""; }catch(err){ handleWriteErr(err); }
+    return; }
   const mf=e.target.closest("[data-mform]");
   if(mf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
     const sid=mf.dataset.mform; const g=k=>$(k+"-"+sid).value.trim();
@@ -725,6 +884,7 @@ $("slist").addEventListener("submit",async e=>{
   try{ await db.collection("tests").add(data); toast("테스트 결과를 저장했어요"); $("tt-"+sid).value=""; $("ts-"+sid).value=""; $("tc-"+sid).value=""; renderStudents(); }catch(err){ handleWriteErr(err); }
 });
 $("slist").addEventListener("change",async e=>{
+  if(onFeeChange(e)) return;
   const cs=e.target.closest("[data-csel]");
   if(cs){ if(!db||!canWrite) return toast("보기 전용이에요"); try{ await db.collection("students").doc(cs.closest(".srow").dataset.sid).update({classId:cs.value}); toast("반을 바꿨어요"); }catch(err){ handleWriteErr(err); } return; }
   const sel=e.target.closest("[data-tsel]"); if(!sel) return; const sid=sel.closest(".srow").dataset.sid;
@@ -732,6 +892,7 @@ $("slist").addEventListener("change",async e=>{
   try{ await db.collection("students").doc(sid).update({teacherId: sel.value==="none"?"":sel.value}); toast("담당 선생님을 바꿨어요"); }catch(err){ handleWriteErr(err); }
 });
 $("slist").addEventListener("click",async e=>{
+  if(e.target.closest("[data-fdel]")){ await onFeeDel(e); return; }
   const row=e.target.closest(".srow"); if(!row) return; const sid=row.dataset.sid; const s=students.find(x=>x.id===sid);
   const dbtn=e.target.closest("[data-sd]");
   if(dbtn){ if(!db||!canWrite) return toast("보기 전용이에요"); const n=+dbtn.dataset.sd; const cur=s.days||[1,2,3,4,5]; const nd=cur.includes(n)?cur.filter(x=>x!==n):cur.concat(n).sort();
@@ -739,6 +900,8 @@ $("slist").addEventListener("click",async e=>{
   const cb=e.target.closest("[data-code]");
   if(cb){ if(cb.dataset.code==="copy"){ copyText(`[수학날개] ${s.name} 학생 숙제앱 코드\n코드: ${s.code}\n앱 열기: ${STUDENT_APP}\n코드를 넣으면 내 숙제·테스트 결과와 숙제왕 순위를 볼 수 있어요.`); }
     else { if(!db||!canWrite) return toast("보기 전용이에요"); try{ await db.collection("students").doc(sid).update({code:newCode()}); toast("코드를 만들었어요"); }catch(err){ handleWriteErr(err); } } return; }
+  const fb=e.target.closest("[data-fees]");
+  if(fb){ openFees = openFees===sid?null:sid; renderStudents(); return; }
   const mb=e.target.closest("[data-mats]");
   if(mb){ openMats = openMats===sid?null:sid; renderStudents(); return; }
   const md=e.target.closest("[data-mdel]");
@@ -786,6 +949,7 @@ async function connect(){
   subscribeRecs();
   db.collection("classes").onSnapshot(snap=>{ classes=snap.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>(a.order||0)-(b.order||0)); if(!(document.activeElement&&document.activeElement.matches("input,textarea,select"))) render(); });
   db.collection("notices").where("date",">=",addDays(TODAY,-60)).onSnapshot(snap=>{ notices=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="notice") renderNotices(); });
+  db.collection("s_fees").onSnapshot(snap=>{ fees=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform,#feeClassForm"))) renderStudents(); });
   db.collection("materials").onSnapshot(snap=>{ materials=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform"))) renderStudents(); });
   db.collection("tests").onSnapshot(snap=>{ tests=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform"))) renderStudents(); });
   $("sync").textContent="불러오는 중…";

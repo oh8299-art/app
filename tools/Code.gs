@@ -1,16 +1,19 @@
 /**
  * 수학날개 숙제체크 서버 (구글 Apps Script)
  * 1) 이 파일 전체를 복사해서 Apps Script 의 Code.gs 에 붙여 넣으세요.
- * 2) 아래 OWNER_CODE 의 "0000" 을 원장님 코드 4자리로 바꾸세요.
- * (시트에서 열지 않고 script.google.com 에서 새 프로젝트로 만들어도 됩니다 — 시트가 자동으로 만들어져요)
+ * 2) 처음 한 번은 아래 OWNER_CODE 의 "0000" 을 원장님 코드 4자리로 바꾸세요.
+ *    (한 번 배포해 두면 기억돼서, 다음에 새로 붙여 넣을 때는 0000 그대로 둬도 됩니다)
  */
 
 // 원장님 코드 — 따옴표 안의 0000 을 원장님 코드로 바꾸세요
 var OWNER_CODE = "0000";
 
 /* ===== 수학날개 서버 핵심 로직 (구글 Apps Script / 테스트 서버 공용) ===== */
-var COLS = ["students", "records", "classes", "notices", "tests", "materials", "teachers"];
-var STAFF_WRITABLE = { students: 1, records: 1, classes: 1, notices: 1, tests: 1, materials: 1 };
+var COLS = ["students", "records", "classes", "notices", "tests", "materials", "teachers", "s_fees"];
+var OWNER_ONLY = { teachers: 1 };
+/* 새 기능은 이름만 정하면 따로 서버를 고치지 않아도 저장돼요. 's_' 로 시작하는 곳은 학생 앱에도 보여요. */
+function validCol_(c) { return /^[a-z][a-z0-9_]{1,30}$/.test(String(c || "")); }
+function allCols_(store) { var set = {}; COLS.forEach(function (c) { set[c] = 1; }); (store.listCols ? store.listCols() : []).forEach(function (c) { if (validCol_(c)) set[c] = 1; }); return Object.keys(set); }
 var MAX_FAILS = 40, LOCK_SECONDS = 600;
 
 function kstNow_() { return new Date(Date.now() + 9 * 3600e3); }
@@ -77,13 +80,15 @@ function handle(store, req) {
     out.tests = asList_(store.getAll("tests"));
     out.materials = asList_(store.getAll("materials"));
     out.teachers = asList_(store.getAll("teachers")).map(function (t) { var o = { id: t.id, name: t.name, order: t.order }; if (who.role === "owner") o.code = t.code; return o; });
+    out.data = {};
+    allCols_(store).forEach(function (c) { out.data[c] = out[c] || asList_(store.getAll(c)); });
     return out;
   }
 
   if (op === "set" || op === "update" || op === "delete" || op === "add") {
     var col = String(req.col || "");
-    if (COLS.indexOf(col) < 0) return { error: "bad_col", message: "알 수 없는 저장 위치예요." };
-    if (!STAFF_WRITABLE[col] && who.role !== "owner") return { error: "forbidden", message: "원장님만 바꿀 수 있어요." };
+    if (!validCol_(col)) return { error: "bad_col", message: "알 수 없는 저장 위치예요." };
+    if (OWNER_ONLY[col] && who.role !== "owner") return { error: "forbidden", message: "원장님만 바꿀 수 있어요." };
     return store.withLock(function () {
       var id = op === "add" ? newId_() : String(req.id || "");
       if (!/^[A-Za-z0-9_\-.:~@+]{1,200}$/.test(id)) return { error: "bad_id", message: "잘못된 항목이에요." };
@@ -121,7 +126,7 @@ function handle(store, req) {
     if (who.role !== "owner") return { error: "forbidden", message: "원장님만 할 수 있어요." };
     var dataIn = req.data || {}, n = 0;
     return store.withLock(function () {
-      for (var cc in dataIn) { if (COLS.indexOf(cc) < 0) continue;
+      for (var cc in dataIn) { if (!validCol_(cc)) continue;
         var rows = dataIn[cc]; for (var rid in rows) { store.put(cc, rid, rows[rid]); n++; } }
       store.flush && store.flush();
       return { ok: true, count: n };
@@ -172,10 +177,14 @@ function studentPayload_(store, sid) {
       files: (x.files || []).filter(function (f) { return f && f.id; }).map(function (f) { return { id: f.id, t: f.type === "application/pdf" ? "application/pdf" : "image/jpeg", n: f.name || "" }; }) }; });
   var homework = records.filter(function (r) { return r.sid === sid && r.date >= from && r.status && r.status !== "skip"; })
     .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) { return { date: r.date, status: r.status, memo: r.memo || "" }; });
+  var extra = {};
+  allCols_(store).forEach(function (c) { if (c.indexOf("s_") !== 0) return;
+    extra[c] = asList_(store.getAll(c)).filter(function (d) { return d.sid === sid; }).sort(byDate).slice(0, 100)
+      .map(function (d) { var o = {}; for (var k in d) if (k !== "by" && k !== "sid") o[k] = d[k]; return o; }); });
   var t = kstNow_().toISOString();
   return { month: month, week: week, updated: t.slice(0, 10) + " " + t.slice(11, 16), top: M.top, topWeek: W.top,
     me: { name: s.name || "", grade: s.grade || "", className: className(s.classId), points: m.points, done: m.done, rank: m.rank,
-      weekPoints: w.points, weekRank: w.rank, notices: notices, homework: homework, tests: tests, materials: mats } };
+      weekPoints: w.points, weekRank: w.rank, notices: notices, homework: homework, tests: tests, materials: mats, extra: extra, fees: extra.s_fees || [] } };
 }
 
 /* ===== 구글 시트·드라이브 연결 부분 ===== */
@@ -186,21 +195,24 @@ var VIEW_COLS = {
   notices: [["date", "날짜"], ["classId", "반ID"], ["text", "공지"]],
   tests: [["date", "날짜"], ["sid", "학생ID"], ["title", "시험"], ["score", "점수"], ["total", "만점"], ["memo", "코멘트"]],
   materials: [["date", "날짜"], ["sid", "학생ID"], ["title", "자료"], ["memo", "설명"]],
-  teachers: [["name", "이름"], ["code", "코드"]]
+  teachers: [["name", "이름"], ["code", "코드"]],
+  s_fees: [["date", "안내일"], ["sid", "학생ID"], ["title", "항목"], ["amount", "금액"], ["paid", "완납"], ["paidAt", "완납일"], ["memo", "메모"]]
 };
-var SHEET_NAMES = { students: "학생", records: "숙제기록", classes: "반", notices: "숙제공지", tests: "테스트", materials: "자료", teachers: "선생님" };
+var SHEET_NAMES = { students: "학생", records: "숙제기록", classes: "반", notices: "숙제공지", tests: "테스트", materials: "자료", teachers: "선생님", s_fees: "교재비" };
+function viewCols_(col) { return VIEW_COLS[col] || [["date", "날짜"], ["sid", "학생ID"], ["title", "제목"], ["memo", "메모"]]; }
+function hasStudentName_(col) { return col === "records" || col === "tests" || col === "materials" || col.indexOf("s_") === 0; }
 var STATUS_KO = { none: "미제출", sub: "제출(피드백 대기)", fix: "오답 정리 중", fixed: "확인 대기", done: "완료", skip: "숙제 없음" };
 
 function makeStore_() {
   var ss = sheetFile_();
   var memo = {}, rowsOf = {};
   function sheet(col) {
-    var name = SHEET_NAMES[col];
+    var name = SHEET_NAMES[col] || col;
     var sh = ss.getSheetByName(name);
     if (!sh) {
       sh = ss.insertSheet(name);
-      var head = ["id", "수정시각", "data(지우지 마세요)"].concat(VIEW_COLS[col].map(function (c) { return c[1]; }));
-      if (col === "records" || col === "tests" || col === "materials") head.push("학생 이름");
+      var head = ["id", "수정시각", "data(지우지 마세요)"].concat(viewCols_(col).map(function (c) { return c[1]; }));
+      if (hasStudentName_(col)) head.push("학생 이름");
       sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight("bold");
       sh.setFrozenRows(1); sh.setColumnWidth(3, 60);
     }
@@ -218,12 +230,20 @@ function makeStore_() {
   }
   function rowValues(col, id, data) {
     var r = [id, new Date(), JSON.stringify(data)];
-    VIEW_COLS[col].forEach(function (c) { var x = data[c[0]]; if (col === "records" && c[0] === "status") x = STATUS_KO[x] || x; r.push(x == null ? "" : (typeof x === "object" ? JSON.stringify(x) : x)); });
-    if (col === "records" || col === "tests" || col === "materials") { var st = load("students")[data.sid]; r.push(st ? st.name : ""); }
+    viewCols_(col).forEach(function (c) { var x = data[c[0]]; if (col === "records" && c[0] === "status") x = STATUS_KO[x] || x; if (c[0] === "paid") x = x ? "완납" : "미납"; if (c[0] === "paidAt" && x) x = new Date(x); r.push(x == null ? "" : (typeof x === "object" ? JSON.stringify(x) : x)); });
+    if (hasStudentName_(col)) { var st = load("students")[data.sid]; r.push(st ? st.name : ""); }
     return r;
   }
   var store = {
-    ownerCode: function () { return OWNER_CODE; },
+    ownerCode: function () {
+      var p = PropertiesService.getScriptProperties(), c = String(OWNER_CODE || "").replace(/\D/g, "");
+      if (c.length === 4 && c !== "0000") { if (p.getProperty("OWNER_CODE") !== c) p.setProperty("OWNER_CODE", c); return c; }
+      return p.getProperty("OWNER_CODE") || "";
+    },
+    listCols: function () {
+      var rev = {}; for (var k in SHEET_NAMES) rev[SHEET_NAMES[k]] = k;
+      return ss.getSheets().map(function (sh) { var n = sh.getName(); return rev[n] || n; });
+    },
     getAll: function (col) { return load(col); },
     put: function (col, id, data) {
       var all = load(col), sh = sheet(col), row = rowsOf[col][id], vals = rowValues(col, id, data);

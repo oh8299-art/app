@@ -15,8 +15,10 @@
 
   function makeDb(onStatus) {
     const cache = {}; COLS.forEach(c => cache[c] = {});
+    const ensure = c => { if (!cache[c]) cache[c] = {}; return cache[c]; };
     const listeners = []; // {col, filter, cb}
     const snapOf = (col, filter) => {
+      if (!cache[col]) cache[col] = {};
       const docs = Object.keys(cache[col]).filter(id => !filter || filter(cache[col][id]))
         .map(id => ({ id, data: () => Object.assign({}, cache[col][id]), exists: true }));
       return { docs, size: docs.length, empty: !docs.length, docChanges: () => [] };
@@ -29,24 +31,26 @@
       const r = await API.call({ op: "load" });
       last = Date.now();
       if (!r.ok) { onStatus && onStatus(r); return r; }
-      COLS.forEach(c => { cache[c] = {}; (r[c] || []).forEach(d => { const id = d.id; const o = Object.assign({}, d); delete o.id; cache[c][id] = o; }); notify(c); });
+      const all = Object.assign({}, r.data || {}); COLS.forEach(c => { if (!all[c]) all[c] = r[c] || []; });
+      Object.keys(cache).forEach(c => { if (!all[c]) all[c] = []; });
+      Object.keys(all).forEach(c => { cache[c] = {}; (all[c] || []).forEach(d => { const id = d.id; const o = Object.assign({}, d); delete o.id; cache[c][id] = o; }); notify(c); });
       onStatus && onStatus(r); return r;
     }
     async function write(body, col) {
       let r; pending++;
       try { r = await API.call(body); } finally { pending--; }
       if (!r.ok) { await refresh(); throw fail(r); }
-      if (r.data) { cache[col][r.id] = r.data; notify(col); }
+      if (r.data) { ensure(col)[r.id] = r.data; notify(col); }
       return r;
     }
     function docRef(col, id) {
       return {
         id,
-        async get() { const d = cache[col][id]; return { exists: !!d, id, data: () => d ? Object.assign({}, d) : undefined }; },
-        async set(data) { cache[col][id] = Object.assign({}, data); notify(col); await write({ op: "set", col, id, data }, col); },
-        async update(data) { cache[col][id] = Object.assign({}, cache[col][id] || {}, data); notify(col); await write({ op: "update", col, id, data }, col); },
-        async delete() { delete cache[col][id]; notify(col); await write({ op: "delete", col, id }, col); },
-        onSnapshot(cb) { const l = { col, filter: null, cb: s => { const d = cache[col][id]; cb({ exists: !!d, id, data: () => d }); } }; listeners.push(l); l.cb(); return () => listeners.splice(listeners.indexOf(l), 1); }
+        async get() { const d = ensure(col)[id]; return { exists: !!d, id, data: () => d ? Object.assign({}, d) : undefined }; },
+        async set(data) { ensure(col)[id] = Object.assign({}, data); notify(col); await write({ op: "set", col, id, data }, col); },
+        async update(data) { ensure(col)[id] = Object.assign({}, ensure(col)[id] || {}, data); notify(col); await write({ op: "update", col, id, data }, col); },
+        async delete() { delete ensure(col)[id]; notify(col); await write({ op: "delete", col, id }, col); },
+        onSnapshot(cb) { const l = { col, filter: null, cb: s => { const d = ensure(col)[id]; cb({ exists: !!d, id, data: () => d }); } }; listeners.push(l); l.cb(); return () => listeners.splice(listeners.indexOf(l), 1); }
       };
     }
     function colRef(col, filter) {
