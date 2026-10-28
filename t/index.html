@@ -174,6 +174,8 @@ tr:last-child td{border-bottom:0}
 .sub1 .sk.fx{color:var(--s-fixed)}
 .sub1 .sn{font-size:13px;color:var(--ink)}
 .sub1 .thumbs{width:100%}
+.fmsg{margin:0;font-size:14px;font-weight:600;min-height:1.2em;grid-column:1/-1}
+.fmsg.bad{color:#d0453b} .fmsg.ok{color:var(--s-done)} .fmsg.run{color:var(--accent)}
 .ftile{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:12px;text-decoration:none;max-width:100%}
 .ftile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
 .wrap.locked header .tabs,.wrap.locked header .scope,.wrap.locked > section:not(#v-login){display:none!important}
@@ -626,7 +628,18 @@ function renderWeek(){
 
 /* ---------- students view ---------- */
 function daysHtml(sel,attr){ return [1,2,3,4,5,6,0].map(n=>`<button type="button" ${attr}="${n}" aria-pressed="${sel.includes(n)}">${DOW[n]}</button>`).join(""); }
-const pendingFiles={};
+const pendingFiles={}, formStatus={};
+function setFS(id,text,cls){ formStatus[id]={text,cls}; const el=document.getElementById("fs-"+id); if(el){ el.textContent=text; el.className="fmsg w4 "+(cls||""); } }
+async function uploadAll(files,kind,onEach){ // 2장씩 동시에 올리기
+  const out=new Array(files.length); let next=0, done=0;
+  async function worker(){ while(next<files.length){ const i=next++; const x=files[i];
+      let blob, type="image/jpeg";
+      if(x.type==="application/pdf"){ blob=x; type="application/pdf"; } else { try{ blob=await shrink(x); }catch(e){ throw new Error(`${i+1}번째 사진: ${e.message||"사진을 줄이지 못했어요"}`); } }
+      let r; try{ r=await assetsApi.upload(blob,{type}); }catch(e){ throw new Error(`${i+1}번째 파일: ${e.message||"올리지 못했어요"}`); }
+      out[i]={id:r.id,type,name:x.name||""}; done++; onEach&&onEach(done); } }
+  await Promise.all([worker(),worker()]);
+  return out;
+}
 function renderStudents(){
   // 새로고침 때 입력 중이던 내용이 지워지지 않게 보관했다가 되살리기
   const keep={}; document.querySelectorAll("#slist .tpanel input:not([type=file]), #slist .tpanel select, #slist .tpanel textarea").forEach(el=>{ if(el.id) keep[el.id]=el.value; });
@@ -634,6 +647,7 @@ function renderStudents(){
   _renderStudents();
   Object.keys(keep).forEach(id=>{ const el=document.getElementById(id); if(el) el.value=keep[id]; });
   Object.keys(pendingFiles).forEach(id=>{ const lab=document.getElementById("pf-"+id); if(lab) lab.textContent=pendingFiles[id].length?` ✅ ${pendingFiles[id].length}개 준비됨`:""; });
+  Object.keys(formStatus).forEach(id=>{ const el=document.getElementById("fs-"+id); if(el){ el.textContent=formStatus[id].text; el.className="fmsg w4 "+(formStatus[id].cls||""); } const b=el&&el.previousElementSibling; if(b&&formStatus[id].cls==="run"){ b.disabled=true; b.textContent="올리는 중…"; } });
   if(focusId){ const el=document.getElementById(focusId); if(el&&el.focus) try{ el.focus(); }catch(e){} }
 }
 function _renderStudents(){
@@ -673,7 +687,7 @@ function feeRow(f,showName){ const st=students.find(x=>x.id===f.sid); const d=f.
 function feePanel(s){
   const list=fees.filter(f=>f.sid===s.id).sort((a,b)=>(a.paid?1:0)-(b.paid?1:0)||(a.date<b.date?1:-1));
   return `<div class="tpanel">
-    <form class="tform" data-fform="${s.id}">
+    <form class="tform" data-fform="${s.id}" novalidate>
       <input class="w2" id="fft-${s.id}" value="${esc(thisMonthFee())}" placeholder="항목 (예: 11월 교재비)" aria-label="항목" required>
       <input class="w2" id="ffa-${s.id}" inputmode="numeric" placeholder="금액 (원)" aria-label="금액" required>
       <input class="w4" id="ffm-${s.id}" value="${esc(lastFeeMemo())}" placeholder="메모 (예: 입금 계좌) — 학생 앱에 보여요" aria-label="메모">
@@ -699,12 +713,12 @@ function fileTile(f,label){ const pdf=f.type==="application/pdf"; return pdf?`<a
 function matPanel(s){
   const list=materials.filter(m=>m.sid===s.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0));
   return `<div class="tpanel">
-    <form class="tform" data-mform="${s.id}">
+    <form class="tform" data-mform="${s.id}" novalidate>
       <input class="w2" id="md-${s.id}" type="date" value="${TODAY}" aria-label="날짜">
       <input class="w2" id="mt-${s.id}" placeholder="자료 이름 (예: 10월 분석표)" aria-label="자료 이름" required>
       <input class="w4" id="mc-${s.id}" placeholder="한 줄 설명 (학생에게 보여요)" aria-label="설명">
       <label class="file">PDF·사진 파일 ${assetsApi?"(여러 개 선택 가능, 파일당 10MB까지)":"(이 계정은 파일을 올릴 수 없어요)"}<br><input id="mf-${s.id}" type="file" accept="application/pdf,image/*" multiple ${assetsApi?"":"disabled"}><b id="pf-mf-${s.id}" style="color:var(--s-done)"></b></label>
-      <button class="act w4" type="submit">자료 올리기</button>
+      <button class="act w4" type="submit">자료 올리기</button><p class="fmsg w4" id="fs-mf-${s.id}"></p>
     </form>
     ${list.length?list.map(m=>`<div class="titem"><div>${esc(m.title)} <small>${esc(m.date.slice(5).replace("-","/"))}${m.memo?" · "+esc(m.memo):""}</small></div><span></span><button class="danger" data-mdel="${m.id}">삭제</button>${(m.files||[]).length?`<div class="thumbs">${m.files.map(f=>fileTile(f,m.title)).join("")}</div>`:""}</div>`).join(""):`<p class="hint">아직 올린 자료가 없어요. 분석표 PDF나 사진을 올리면 그 학생 앱 '자료'에 보여요.</p>`}
   </div>`;
@@ -715,14 +729,14 @@ function newCode(){ const used=new Set(students.map(s=>s.code)); for(let i=0;i<5
 function testPanel(s){
   const list=tests.filter(t=>t.sid===s.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0));
   return `<div class="tpanel">
-    <form class="tform" data-tform="${s.id}">
+    <form class="tform" data-tform="${s.id}" novalidate>
       <input class="w2" id="td-${s.id}" type="date" value="${TODAY}" aria-label="날짜">
       <input class="w2" id="tt-${s.id}" placeholder="시험명 (예: KMA 4-2 1차)" aria-label="시험명" required>
       <input id="ts-${s.id}" inputmode="decimal" placeholder="점수" aria-label="점수" required>
       <input id="tm-${s.id}" inputmode="decimal" placeholder="만점" value="100" aria-label="만점">
       <input class="w2" id="tc-${s.id}" placeholder="한 줄 코멘트 (학생에게 보여요)" aria-label="코멘트">
       <label class="file">시험지 사진 ${assetsApi?"":"(이 계정은 사진을 올릴 수 없어요)"}<br><input id="tp-${s.id}" type="file" accept="image/*" multiple ${assetsApi?"":"disabled"}><b id="pf-tp-${s.id}" style="color:var(--s-done)"></b></label>
-      <button class="act w4" type="submit">테스트 결과 추가</button>
+      <button class="act w4" type="submit">테스트 결과 추가</button><p class="fmsg w4" id="fs-tp-${s.id}"></p>
     </form>
     ${list.length?list.map(t=>`<div class="titem"><div>${esc(t.title)} <small>${esc(t.date.slice(5).replace("-","/"))}${t.memo?" · "+esc(t.memo):""}</small></div><b>${esc(t.score)}${t.total?"/"+esc(t.total):""}</b><button class="danger" data-tdel="${t.id}">삭제</button>${(t.photos||[]).length?`<div class="thumbs">${t.photos.map(id=>`<a href="#" data-fopen="${esc(id)}"><img data-fid="${esc(id)}" alt="${esc(t.title)} 사진"></a>`).join("")}</div>`:""}</div>`).join(""):`<p class="hint">아직 테스트 기록이 없어요.</p>`}
   </div>`;
@@ -877,32 +891,37 @@ $("slist").addEventListener("submit",async e=>{
     return; }
   const mf=e.target.closest("[data-mform]");
   if(mf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
-    const sid=mf.dataset.mform; const g=k=>$(k+"-"+sid).value.trim();
-    const files=pendingFiles["mf-"+sid]||[]; if(!files.length) return toast("올릴 파일을 골라 주세요");
-    if(!assetsApi) return toast("이 계정은 파일을 올릴 수 없어요");
-    const big=files.find(x=>x.type==="application/pdf"&&x.size>10*1024*1024); if(big) return toast(big.name+" 파일이 10MB보다 커요");
+    const sid=mf.dataset.mform, fid="mf-"+sid; const g=k=>$(k+"-"+sid).value.trim();
+    const files=pendingFiles[fid]||[];
+    if(!g("mt")) return setFS(fid,"자료 이름을 적어 주세요.","bad");
+    if(!files.length) return setFS(fid,"올릴 파일을 골라 주세요.","bad");
+    const big=files.find(x=>x.size>10*1024*1024); if(big) return setFS(fid,`${big.name} 파일이 10MB보다 커요.`,"bad");
     const data={sid,date:g("md")||TODAY,title:g("mt"),memo:g("mc"),files:[],createdAt:Date.now()}; if(me) data.by=me;
-    const btn=mf.querySelector("button[type=submit]"); btn.disabled=true;
-    try{ for(let i=0;i<files.length;i++){ btn.textContent=`올리는 중 ${i+1}/${files.length}…`; const x=files[i];
-        if(x.type==="application/pdf"){ const r=await assetsApi.upload(x,{type:"application/pdf"}); data.files.push({id:r.id,type:"application/pdf",name:x.name}); }
-        else { const blob=await shrink(x); const r=await assetsApi.upload(blob,{type:"image/jpeg"}); data.files.push({id:r.id,type:"image/jpeg",name:x.name}); } }
-    }catch(err){ btn.disabled=false; btn.textContent="자료 올리기"; return toast("파일을 올리지 못했어요. 다시 시도해 주세요"); }
-    btn.disabled=false; btn.textContent="자료 올리기";
-    try{ await db.collection("materials").add(data); delete pendingFiles["mf-"+sid]; toast("자료를 올렸어요 · 학생 앱에 바로 보여요"); renderStudents(); }catch(err){ handleWriteErr(err); }
+    const btn=mf.querySelector("button[type=submit]"); btn.disabled=true; SN.busy.n++;
+    setFS(fid,`올리는 중 0/${files.length}… 화면을 닫지 말아 주세요`,"run");
+    try{ data.files=await uploadAll(files,"m",n=>setFS(fid,`올리는 중 ${n}/${files.length}… 화면을 닫지 말아 주세요`,"run"));
+      await db.collection("materials").add(data); delete pendingFiles[fid]; setFS(fid,"✅ 자료를 올렸어요. 학생 앱에 바로 보여요.","ok"); toast("자료를 올렸어요");
+    }catch(err){ setFS(fid,(err.serverMessage||err.message||"올리지 못했어요")+" · 다시 눌러 주세요.","bad"); }
+    finally{ SN.busy.n--; btn.disabled=false; btn.textContent="자료 올리기"; renderStudents(); }
     return; }
   const f=e.target.closest("[data-tform]"); if(!f) return; e.preventDefault();
   if(!db||!canWrite) return toast("보기 전용이에요");
-  const sid=f.dataset.tform; const g=k=>$(k+"-"+sid).value.trim();
+  const sid=f.dataset.tform, fid="tp-"+sid; const g=k=>$(k+"-"+sid).value.trim();
   const sc=g("ts"), tot=g("tm");
-  const data={sid,date:g("td")||TODAY,title:g("tt"),score:isNaN(+sc)||sc===""?sc:+sc,total:+tot||0,memo:g("tc"),createdAt:Date.now(),photos:[]};
+  if(!g("tt")) return setFS(fid,"시험명을 적어 주세요.","bad");
+  if(sc==="") return setFS(fid,"점수를 적어 주세요. (오른쪽 칸은 만점이에요)","bad");
+  const data={sid,date:g("td")||TODAY,title:g("tt"),score:isNaN(+sc)?sc:+sc,total:+tot||0,memo:g("tc"),createdAt:Date.now(),photos:[]};
   if(me) data.by=me;
-  const files=pendingFiles["tp-"+sid]||[];
-  const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
+  const files=pendingFiles[fid]||[];
+  const btn=f.querySelector("button[type=submit]"); btn.disabled=true; SN.busy.n++;
+  setFS(fid,files.length?`사진 올리는 중 0/${files.length}… 화면을 닫지 말아 주세요`:"저장하는 중…","run");
   try{
-    for(let i=0;i<files.length;i++){ btn.textContent=`사진 올리는 중 ${i+1}/${files.length}…`; const blob=await shrink(files[i]); const r=await assetsApi.upload(blob,{type:"image/jpeg"}); data.photos.push(r.id); }
-  }catch(err){ btn.disabled=false; btn.textContent="테스트 결과 추가"; return toast("사진을 올리지 못했어요. 다시 시도해 주세요"); }
-  btn.disabled=false; btn.textContent="테스트 결과 추가";
-  try{ await db.collection("tests").add(data); delete pendingFiles["tp-"+sid]; toast("테스트 결과를 저장했어요"); $("tt-"+sid).value=""; $("ts-"+sid).value=""; $("tc-"+sid).value=""; renderStudents(); }catch(err){ handleWriteErr(err); }
+    if(files.length) data.photos=(await uploadAll(files,"t",n=>setFS(fid,`사진 올리는 중 ${n}/${files.length}… 화면을 닫지 말아 주세요`,"run"))).map(x=>x.id);
+    await db.collection("tests").add(data); delete pendingFiles[fid];
+    setFS(fid,`✅ 저장했어요${files.length?` (사진 ${files.length}장)`:""}. 학생 앱에 바로 보여요.`,"ok"); toast("테스트 결과를 저장했어요");
+    $("tt-"+sid).value=""; $("ts-"+sid).value=""; $("tc-"+sid).value="";
+  }catch(err){ setFS(fid,(err.serverMessage||err.message||"저장하지 못했어요")+" · 다시 눌러 주세요.","bad"); }
+  finally{ SN.busy.n--; btn.disabled=false; btn.textContent="테스트 결과 추가"; renderStudents(); }
 });
 $("slist").addEventListener("change",async e=>{
   if(onFeeChange(e)) return;

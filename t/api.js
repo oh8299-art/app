@@ -1,5 +1,6 @@
 /* 수학날개 숙제체크 — 구글 서버 연결 (예전 Claude 저장소와 같은 사용법) */
 (function () {
+  const SN_BUSY = { n: 0 };
   const API = {
     code: "",
     async call(body) {
@@ -27,7 +28,7 @@
     const fail = r => { const e = new Error(r.message || "저장하지 못했어요"); e.code = r.error === "forbidden" || r.error === "bad_code" ? "invalid_argument" : (r.error || "unavailable"); e.serverMessage = r.message; return e; };
     let pending = 0, last = 0;
     async function refresh() {
-      if (pending) return;
+      if (pending || SN_BUSY.n) return;
       const r = await API.call({ op: "load" });
       last = Date.now();
       if (!r.ok) { onStatus && onStatus(r); return r; }
@@ -103,5 +104,5 @@
   });
   function alertMsg(m) { const t = document.getElementById("toast"); if (t) { t.textContent = m; t.hidden = false; setTimeout(() => t.hidden = true, 2500); } }
 
-  window.SN = { API, makeDb, makeAssets, fileUrl };
+  window.SN = { API, makeDb, makeAssets, fileUrl, busy: SN_BUSY };
 })();
