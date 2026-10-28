@@ -328,13 +328,18 @@ function setupUpload(){
   $("upSend").textContent = upKind==="hw" ? "선생님께 보내기" : "오답 정리 보내기";
 }
 async function shrink(file){
+  const max=1600;
+  const draw=(src,w,h)=>{ const k=Math.min(1,max/Math.max(w,h)); const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k)); c.getContext("2d").drawImage(src,0,0,c.width,c.height); return new Promise(ok=>c.toBlob(b=>ok(b),"image/jpeg",0.8)); };
+  // 1) 큰 사진도 줄이면서 읽기 (안드로이드 크롬)
+  if(window.createImageBitmap){ try{ const bm=await createImageBitmap(file); const b=await draw(bm,bm.width,bm.height); bm.close&&bm.close(); if(b&&b.size) return b; }catch(e){} }
+  // 2) 일반 방식
   const url=URL.createObjectURL(file);
-  try{ const img=await new Promise((ok,bad)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=bad; i.src=url; });
-    const max=1600, k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
-    const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k);
-    c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-    return await new Promise(ok=>c.toBlob(ok,"image/jpeg",0.8));
-  } finally { URL.revokeObjectURL(url); }
+  try{ const img=await new Promise((ok,bad)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=()=>bad(new Error("사진을 열 수 없어요")); i.src=url; });
+    const b=await draw(img,img.naturalWidth,img.naturalHeight); if(b&&b.size) return b;
+  }catch(e){} finally { URL.revokeObjectURL(url); }
+  // 3) 줄이지 못하면 원본 그대로 (너무 크면 안내)
+  if(file.size<=3.5*1024*1024) return file;
+  throw new Error("사진이 너무 커서 보낼 수 없어요. 카메라로 다시 찍거나 화면 캡처로 보내 주세요.");
 }
 const toB64=blob=>new Promise((ok,bad)=>{ const fr=new FileReader(); fr.onload=()=>ok(String(fr.result).split(",")[1]||""); fr.onerror=bad; fr.readAsDataURL(blob); });
 function drawPrev(){ $("upPrev").innerHTML=upList.map((f,i)=>`<div><img src="${f.url}" alt="고른 사진 ${i+1}"><button type="button" data-rm="${i}" aria-label="사진 빼기">✕</button></div>`).join("");
@@ -349,15 +354,16 @@ $("upSend").onclick=async()=>{
   btn.disabled=true; msg.className="upmsg"; const ids=[];
   try{
     for(let i=0;i<upList.length;i++){ btn.textContent=`사진 보내는 중 ${i+1}/${upList.length}…`;
-      const r=await api({op:"s_upload",code:CODE,b64:await toB64(await shrink(upList[i].file))});
-      if(!r.ok) throw new Error(r.message||"사진을 보내지 못했어요."); ids.push(r.id); }
+      let blob; try{ blob=await shrink(upList[i].file); }catch(e){ throw new Error(`${i+1}번째 사진: `+(e&&e.message||"사진을 줄이지 못했어요.")); }
+      const r=await api({op:"s_upload",code:CODE,b64:await toB64(blob)});
+      if(!r.ok) throw new Error(`${i+1}번째 사진: `+(r.message||"사진을 보내지 못했어요.")+(r.error?` (${r.error})`:"")); ids.push(r.id); }
     btn.textContent="거의 다 됐어요…";
     const r=await api({op:"submit",code:CODE,kind:upKind,date:$("upDate").value,ids,note:$("upNote").value.trim()});
-    if(!r.ok) throw new Error(r.message||"보내지 못했어요.");
+    if(!r.ok) throw new Error((r.message||"보내지 못했어요.")+(r.error?` (${r.error})`:""));
     upList.forEach(x=>URL.revokeObjectURL(x.url)); upList=[]; drawPrev(); $("upNote").value="";
     msg.className="upmsg ok"; msg.textContent = upKind==="hw" ? "✅ 선생님께 보냈어요! 확인하면 아래 '최근 숙제'에 피드백이 떠요." : "✅ 오답 정리를 보냈어요! 선생님이 확인하면 완료로 바뀌어요.";
     await tryCode(CODE,true);
-  }catch(err){ msg.className="upmsg bad"; msg.textContent=(err.message||"보내지 못했어요.")+" 다시 눌러 주세요."; }
+  }catch(err){ msg.className="upmsg bad"; msg.textContent=((err&&err.message)||("보내지 못했어요"+(err&&err.type?" ("+err.type+")":"")))+" · 다시 눌러 주세요."; }
   finally{ btn.disabled=false; setupUpload(); }
 };
 async function tryCode(code,silent){
