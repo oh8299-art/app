@@ -131,6 +131,8 @@ section{display:flex;flex-direction:column;gap:10px}
 .hw .subs{margin-top:6px;display:flex;flex-direction:column;gap:6px}
 .hw .subs button{align-self:flex-start;border:0;background:none;color:var(--accent);font:600 12px var(--f-body);padding:0;cursor:pointer}
 .hw .subs .photos{display:flex;flex-direction:column;gap:6px}
+.kakaotip{background:var(--s-fix-bg);border-radius:12px;padding:10px 14px;font-size:14px;line-height:1.5}
+.kakaotip a{color:var(--accent);font-weight:700}
 .mat{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}
 .card .mat:first-child,.dgrp+.mat{border-top:0}
 .mat .tt{font-weight:700}
@@ -168,6 +170,7 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fle
   <div id="mainView" hidden>
     <div style="display:flex;flex-direction:column;gap:20px">
       <div class="me" id="me"></div>
+      <div class="kakaotip" id="kakaoTip" hidden>카카오톡 안에서 열려 있어요. 사진 보내기가 잘 안 되면 <a id="openExt" href="#">크롬으로 열기</a>를 눌러 주세요.</div>
       <section id="upSec">
         <button class="upbtn" id="upOpen" aria-expanded="false">📷 숙제 올리기 <small>사진으로 선생님께 보내요</small></button>
         <div class="card uppanel" id="upPanel" hidden>
@@ -341,12 +344,25 @@ async function shrink(file){
   if(file.size<=3.5*1024*1024) return file;
   throw new Error("사진이 너무 커서 보낼 수 없어요. 카메라로 다시 찍거나 화면 캡처로 보내 주세요.");
 }
-const toB64=blob=>new Promise((ok,bad)=>{ const fr=new FileReader(); fr.onload=()=>ok(String(fr.result).split(",")[1]||""); fr.onerror=bad; fr.readAsDataURL(blob); });
+const toB64=blob=>new Promise((ok,bad)=>{ const fr=new FileReader(); fr.onload=()=>ok(String(fr.result).split(",")[1]||""); fr.onerror=()=>bad(new Error("사진 파일을 읽지 못했어요."+(IN_KAKAO?" 위의 '크롬으로 열기'를 눌러 크롬에서 보내 주세요.":""))); fr.readAsDataURL(blob); });
+const IN_KAKAO=/KAKAOTALK/i.test(navigator.userAgent);
 function drawPrev(){ $("upPrev").innerHTML=upList.map((f,i)=>`<div><img src="${f.url}" alt="고른 사진 ${i+1}"><button type="button" data-rm="${i}" aria-label="사진 빼기">✕</button></div>`).join("");
   $("upPick").firstChild.textContent = upList.length ? `📸 사진 더 추가하기 (${upList.length}장)` : "📸 사진 찍기 / 고르기"; }
+if(IN_KAKAO){ $("kakaoTip").hidden=false; $("openExt").href="kakaotalk://web/openExternal?url="+encodeURIComponent(location.href.split("#")[0]); }
 $("upOpen").onclick=()=>{ const p=$("upPanel"); p.hidden=!p.hidden; $("upOpen").setAttribute("aria-expanded",!p.hidden); if(!p.hidden){ $("upMsg").textContent=""; $("upMsg").className="upmsg"; } };
 $("upKind").onclick=e=>{ const b=e.target.closest("[data-k]"); if(!b||b.disabled) return; upKind=b.dataset.k; setupUpload(); };
-$("upFiles").onchange=e=>{ for(const f of e.target.files){ if(upList.length>=10) break; if(f.type.startsWith("image/")) upList.push({file:f,url:URL.createObjectURL(f)}); } e.target.value=""; drawPrev(); };
+$("upFiles").onchange=async e=>{
+  const files=[...e.target.files]; e.target.value=""; let bad=0;
+  const msg=$("upMsg"); msg.className="upmsg"; msg.textContent=files.length?"사진 준비 중…":"";
+  for(const f of files){ if(upList.length>=10) break; if(f.type&&!f.type.startsWith("image/")) continue;
+    try{ // 고르는 즉시 앱 안으로 복사 (카톡 안의 창에서 나중에 파일을 못 읽는 문제 방지)
+      const buf=await f.arrayBuffer(); const copy=new Blob([buf],{type:f.type||"image/jpeg"});
+      upList.push({file:copy,url:URL.createObjectURL(copy)});
+    }catch(err){ bad++; } }
+  drawPrev();
+  if(bad){ msg.className="upmsg bad"; msg.textContent=`사진 ${bad}장을 읽지 못했어요.`+(IN_KAKAO?" 위의 '크롬으로 열기'를 눌러 크롬에서 보내 주세요.":" 다른 사진으로 다시 골라 주세요."); }
+  else msg.textContent="";
+};
 $("upPrev").onclick=e=>{ const b=e.target.closest("[data-rm]"); if(!b) return; const [x]=upList.splice(+b.dataset.rm,1); URL.revokeObjectURL(x.url); drawPrev(); };
 $("upSend").onclick=async()=>{
   const msg=$("upMsg"), btn=$("upSend");
