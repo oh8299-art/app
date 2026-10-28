@@ -114,6 +114,23 @@ section{display:flex;flex-direction:column;gap:10px}
 .fee.paid .st .chk{border-color:var(--s-done);background:var(--s-done);color:#fff}
 .fee.paid .amt{color:var(--muted)}
 .fee .fm{grid-column:1/-1;font-size:13px;background:var(--surface);border-radius:8px;padding:7px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.upbtn{width:100%;border:0;border-radius:16px;padding:16px;background:var(--sun);color:#3a2a00;font:400 26px var(--f-display);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;box-shadow:0 2px 0 rgba(0,0,0,.08)}
+.upbtn small{font:600 13px var(--f-body);opacity:.8}
+.uppanel{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.uppanel .seg{display:grid;grid-template-columns:1fr 1fr}
+.seg button:disabled{opacity:.4;cursor:default}
+.uppanel select,.uppanel input[type=text]{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:11px;font:15px var(--f-body)}
+.pick{display:flex;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--accent);border-radius:12px;padding:16px;color:var(--accent);font-weight:700;cursor:pointer;text-align:center}
+.pick input{position:absolute;width:1px;height:1px;opacity:0}
+.prev{display:flex;flex-wrap:wrap;gap:6px}
+.prev div{position:relative;width:72px;height:72px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)}
+.prev img{width:100%;height:100%;object-fit:cover}
+.prev button{position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:22px;padding:0;cursor:pointer}
+.upmsg{margin:0;font-size:14px;font-weight:600;min-height:1.3em}
+.upmsg.ok{color:var(--s-done)} .upmsg.bad{color:#d0453b}
+.hw .subs{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.hw .subs button{align-self:flex-start;border:0;background:none;color:var(--accent);font:600 12px var(--f-body);padding:0;cursor:pointer}
+.hw .subs .photos{display:flex;flex-direction:column;gap:6px}
 .mat{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}
 .card .mat:first-child,.dgrp+.mat{border-top:0}
 .mat .tt{font-weight:700}
@@ -151,6 +168,19 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fle
   <div id="mainView" hidden>
     <div style="display:flex;flex-direction:column;gap:20px">
       <div class="me" id="me"></div>
+      <section id="upSec">
+        <button class="upbtn" id="upOpen" aria-expanded="false">📷 숙제 올리기 <small>사진으로 선생님께 보내요</small></button>
+        <div class="card uppanel" id="upPanel" hidden>
+          <div class="seg" id="upKind"><button type="button" data-k="hw" aria-pressed="true">오늘 숙제</button><button type="button" data-k="fix" aria-pressed="false">오답 정리</button></div>
+          <label for="upDate" class="sub" id="upDateLab">어떤 숙제인가요?</label>
+          <select id="upDate"></select>
+          <label class="pick" id="upPick">📸 사진 찍기 / 고르기<input type="file" id="upFiles" accept="image/*" multiple></label>
+          <div class="prev" id="upPrev"></div>
+          <input type="text" id="upNote" maxlength="300" placeholder="선생님께 한마디 (안 써도 돼요)">
+          <button class="btn" id="upSend" type="button">선생님께 보내기</button>
+          <p class="upmsg" id="upMsg" aria-live="polite"></p>
+        </div>
+      </section>
       <section id="feeSec" hidden><h2>교재비</h2><div class="card" id="fees"></div></section>
       <section><h2>숙제 안내</h2><div class="nlist" id="notices"></div></section>
       <section><h2>테스트 기록</h2><div class="card" id="tests"></div></section>
@@ -235,6 +265,10 @@ function renderMain(p){
     <div class="stat"><span class="k">이번 주 ${wp}점</span><span class="v">${wr?wr+"<small>위</small>":"–"}</span></div>
     <div class="stat" style="text-align:right"><span class="k">${month?month+"월 ":"이번 달 "}${p.points}점</span><span class="v">${p.rank?p.rank+"<small>위</small>":"–"}</span></div>
     <div class="cheer">${esc(cheer)}</div>`;
+  $("hw").onclick=e=>{ const b=e.target.closest("[data-hi]"); if(!b) return; const r=HW[+b.dataset.hi]; const box=b.nextElementSibling; const open=box.hidden;
+    if(open&&!box.childElementCount){ box.innerHTML=`<p class="sub">사진 여는 중…</p>`; const ids=(r.subs||[]).flatMap(x=>x.files||[]);
+      Promise.all(ids.map(id=>photoUrl({id,t:"image/jpeg"}).catch(()=>null))).then(us=>{ box.innerHTML=us.map((u,i)=>u?`<img src="${u}" alt="보낸 사진 ${i+1}">`:`<p class="sub">사진 ${i+1}을 열 수 없어요.</p>`).join(""); }); }
+    box.hidden=!open; b.textContent=`📷 보낸 사진 ${(r.subs||[]).reduce((a,x)=>a+(x.files||[]).length,0)}장 ${open?"접기 ▴":"보기 ▾"}`; };
   const fz=(p.fees||[]).slice().sort((a,b)=>(a.paid?1:0)-(b.paid?1:0)||(a.date<b.date?1:-1)).slice(0,6);
   $("feeSec").hidden=!fz.length;
   $("fees").innerHTML=fz.map(f=>{ const d=f.date?fmtD(f.date):null; const pd=f.paid&&f.paidAt?new Date(f.paidAt):null;
@@ -269,14 +303,63 @@ function renderMain(p){
       else { box.innerHTML=`<img src="${u}" alt="${esc(f.n||"자료 사진")}">`; box.hidden=false; lab.textContent="접기/펼치기"; }
     }catch(err){ lab.textContent="열 수 없어요"; }
     b.disabled=false; };
-  const hw=(p.homework||[]);
-  $("hw").innerHTML = hw.length ? hw.map(r=>{const d=fmtD(r.date); const s=ST[r.status]||ST.none;
-      return `<div class="hw"><div class="dt">${d.md}<small>${d.dow}요일</small></div><div><span class="pill" style="color:var(${s[1]});background:var(${s[2]})">${s[0]}</span>${r.memo?`<div class="fb">${esc(r.memo)}</div>`:""}</div></div>`}).join("")
+  const hw=(p.homework||[]); HW=hw; setupUpload();
+  $("hw").innerHTML = hw.length ? hw.map((r,hi)=>{const d=fmtD(r.date); const s=ST[r.status]||ST.none; const nf=(r.subs||[]).reduce((a,x)=>a+(x.files||[]).length,0);
+      return `<div class="hw"><div class="dt">${d.md}<small>${d.dow}요일</small></div><div><span class="pill" style="color:var(${s[1]});background:var(${s[2]})">${s[0]}</span>${r.memo?`<div class="fb">${esc(r.memo)}</div>`:""}${nf?`<div class="subs"><button data-hi="${hi}">📷 보낸 사진 ${nf}장 보기 ▾</button><div class="photos" hidden></div></div>`:""}</div></div>`}).join("")
     : `<div class="empty">아직 숙제 기록이 없어요.</div>`;
   $("upd").textContent = D.updated ? D.updated+" 기준" : "";
   $("loginView").hidden=true; $("mainView").hidden=false; window.scrollTo(0,0);
 }
 
+let HW=[], upKind="hw", upList=[];
+const kday=n=>{ const d=new Date(Date.now()+9*3600e3+n*864e5); return d.toISOString().slice(0,10); };
+function setupUpload(){
+  const fixes=HW.filter(r=>r.status==="fix"||r.status==="fixed");
+  const fixBtn=$("upKind").querySelector('[data-k="fix"]');
+  fixBtn.disabled=!fixes.length; fixBtn.title=fixes.length?"":"오답 정리할 숙제가 없어요";
+  if(upKind==="fix"&&!fixes.length) upKind="hw";
+  [...$("upKind").children].forEach(b=>b.setAttribute("aria-pressed",b.dataset.k===upKind));
+  const sel=$("upDate"), cur=sel.value;
+  if(upKind==="hw"){ $("upDateLab").textContent="며칠 숙제인가요?";
+    sel.innerHTML=[0,-1,-2].map(n=>{ const d=kday(n), f=fmtD(d); return `<option value="${d}">${n===0?"오늘":n===-1?"어제":"그저께"} ${f.md}(${f.dow}) 숙제</option>`; }).join(""); }
+  else { $("upDateLab").textContent="어느 날 숙제의 오답 정리인가요?";
+    sel.innerHTML=fixes.map(r=>{ const f=fmtD(r.date); return `<option value="${r.date}">${f.md}(${f.dow}) 숙제 오답 정리${r.status==="fixed"?" (다시 보내기)":""}</option>`; }).join(""); }
+  if(cur&&[...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  $("upSend").textContent = upKind==="hw" ? "선생님께 보내기" : "오답 정리 보내기";
+}
+async function shrink(file){
+  const url=URL.createObjectURL(file);
+  try{ const img=await new Promise((ok,bad)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=bad; i.src=url; });
+    const max=1600, k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+    const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    return await new Promise(ok=>c.toBlob(ok,"image/jpeg",0.8));
+  } finally { URL.revokeObjectURL(url); }
+}
+const toB64=blob=>new Promise((ok,bad)=>{ const fr=new FileReader(); fr.onload=()=>ok(String(fr.result).split(",")[1]||""); fr.onerror=bad; fr.readAsDataURL(blob); });
+function drawPrev(){ $("upPrev").innerHTML=upList.map((f,i)=>`<div><img src="${f.url}" alt="고른 사진 ${i+1}"><button type="button" data-rm="${i}" aria-label="사진 빼기">✕</button></div>`).join("");
+  $("upPick").firstChild.textContent = upList.length ? `📸 사진 더 추가하기 (${upList.length}장)` : "📸 사진 찍기 / 고르기"; }
+$("upOpen").onclick=()=>{ const p=$("upPanel"); p.hidden=!p.hidden; $("upOpen").setAttribute("aria-expanded",!p.hidden); if(!p.hidden){ $("upMsg").textContent=""; $("upMsg").className="upmsg"; } };
+$("upKind").onclick=e=>{ const b=e.target.closest("[data-k]"); if(!b||b.disabled) return; upKind=b.dataset.k; setupUpload(); };
+$("upFiles").onchange=e=>{ for(const f of e.target.files){ if(upList.length>=10) break; if(f.type.startsWith("image/")) upList.push({file:f,url:URL.createObjectURL(f)}); } e.target.value=""; drawPrev(); };
+$("upPrev").onclick=e=>{ const b=e.target.closest("[data-rm]"); if(!b) return; const [x]=upList.splice(+b.dataset.rm,1); URL.revokeObjectURL(x.url); drawPrev(); };
+$("upSend").onclick=async()=>{
+  const msg=$("upMsg"), btn=$("upSend");
+  if(!upList.length){ msg.className="upmsg bad"; msg.textContent="먼저 사진을 골라 주세요."; return; }
+  btn.disabled=true; msg.className="upmsg"; const ids=[];
+  try{
+    for(let i=0;i<upList.length;i++){ btn.textContent=`사진 보내는 중 ${i+1}/${upList.length}…`;
+      const r=await api({op:"s_upload",code:CODE,b64:await toB64(await shrink(upList[i].file))});
+      if(!r.ok) throw new Error(r.message||"사진을 보내지 못했어요."); ids.push(r.id); }
+    btn.textContent="거의 다 됐어요…";
+    const r=await api({op:"submit",code:CODE,kind:upKind,date:$("upDate").value,ids,note:$("upNote").value.trim()});
+    if(!r.ok) throw new Error(r.message||"보내지 못했어요.");
+    upList.forEach(x=>URL.revokeObjectURL(x.url)); upList=[]; drawPrev(); $("upNote").value="";
+    msg.className="upmsg ok"; msg.textContent = upKind==="hw" ? "✅ 선생님께 보냈어요! 확인하면 아래 '최근 숙제'에 피드백이 떠요." : "✅ 오답 정리를 보냈어요! 선생님이 확인하면 완료로 바뀌어요.";
+    await tryCode(CODE,true);
+  }catch(err){ msg.className="upmsg bad"; msg.textContent=(err.message||"보내지 못했어요.")+" 다시 눌러 주세요."; }
+  finally{ btn.disabled=false; setupUpload(); }
+};
 async function tryCode(code,silent){
   if(norm(code).length!==4){ if(!silent) $("err").textContent="숫자 4자리를 넣어 주세요."; return; }
   $("go").disabled=true; $("go").textContent="여는 중…"; $("err").textContent="";

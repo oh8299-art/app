@@ -68,6 +68,38 @@ function handle(store, req) {
     return { ok: true, type: f.type, b64: f.b64 };
   }
 
+  if (op === "s_upload") {
+    if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 올려 주세요." };
+    var sb = String(req.b64 || "");
+    if (!sb) return { error: "empty", message: "사진이 비어 있어요." };
+    if (sb.length > 5 * 1024 * 1024) return { error: "too_big", message: "사진이 너무 커요." };
+    var sname = (who.name || "학생") + "_숙제_" + kstDay_(0) + ".jpg";
+    return { ok: true, id: store.saveFile(sname, "image/jpeg", sb, "sid:" + who.id) };
+  }
+  if (op === "submit") {
+    if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 올려 주세요." };
+    var kind = req.kind === "fix" ? "fix" : "hw";
+    var ids = (req.ids || []).map(String).filter(function (x) { return x; }).slice(0, 12);
+    if (!ids.length) return { error: "empty", message: "사진을 한 장 이상 골라 주세요." };
+    for (var q = 0; q < ids.length; q++) if (store.fileDesc(ids[q]) !== "sid:" + who.id) return { error: "forbidden", message: "사진을 다시 올려 주세요." };
+    var date = String(req.date || kstDay_(0));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "bad_date", message: "날짜가 잘못됐어요." };
+    return store.withLock(function () {
+      var rid = date + "_" + who.id, rec = store.getAll("records")[rid];
+      if (kind === "hw" && (date < kstDay_(-3) || date > kstDay_(0))) return { error: "bad_date", message: "최근 3일 숙제만 올릴 수 있어요." };
+      if (kind === "fix" && !(rec && (rec.status === "fix" || rec.status === "fixed"))) return { error: "no_fix", message: "오답 정리할 숙제가 없어요." };
+      rec = rec || { date: date, sid: who.id, status: "none", memo: "", stamps: {} };
+      rec.stamps = rec.stamps || {}; rec.subs = rec.subs || [];
+      var now = Date.now();
+      rec.subs.push({ at: now, kind: kind, files: ids, note: String(req.note || "").slice(0, 300) });
+      if (kind === "hw" && (rec.status === "none" || !rec.status)) { rec.status = "sub"; rec.stamps.sub = now; }
+      if (kind === "fix" && rec.status === "fix") { rec.status = "fixed"; rec.stamps.fixed = now; }
+      rec.updatedAt = now;
+      store.put("records", rid, rec);
+      return { ok: true, status: rec.status, date: date };
+    });
+  }
+
   if (who.role === "student") return { error: "forbidden", message: "선생님 코드로 들어와 주세요." };
 
   if (op === "load") {
@@ -95,6 +127,7 @@ function handle(store, req) {
       if (op === "delete") { store.del(col, id); return { ok: true, id: id }; }
       var data = req.data && typeof req.data === "object" ? req.data : {};
       if (op === "update") { var cur = store.getAll(col)[id] || {}; for (var k in data) cur[k] = data[k]; data = cur; }
+      if (op === "set" && col === "records") { var old = store.getAll(col)[id]; if (old && old.subs && !data.subs) data.subs = old.subs; }
       if (col === "teachers" || col === "students") { // 코드 중복 방지
         var c = normCode_(data.code);
         if (c) {
@@ -136,6 +169,7 @@ function handle(store, req) {
 }
 
 function studentOwnsFile_(store, sid, fid) {
+  if (store.fileDesc && store.fileDesc(fid) === "sid:" + sid) return true;
   var t = store.getAll("tests"), m = store.getAll("materials");
   for (var a in t) if (t[a].sid === sid && (t[a].photos || []).indexOf(fid) >= 0) return true;
   for (var b in m) if (m[b].sid === sid) { var fs = m[b].files || []; for (var i = 0; i < fs.length; i++) if (fs[i] && fs[i].id === fid) return true; }
@@ -176,7 +210,8 @@ function studentPayload_(store, sid) {
     .map(function (x) { return { date: x.date, title: x.title || "", memo: x.memo || "",
       files: (x.files || []).filter(function (f) { return f && f.id; }).map(function (f) { return { id: f.id, t: f.type === "application/pdf" ? "application/pdf" : "image/jpeg", n: f.name || "" }; }) }; });
   var homework = records.filter(function (r) { return r.sid === sid && r.date >= from && r.status && r.status !== "skip"; })
-    .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) { return { date: r.date, status: r.status, memo: r.memo || "" }; });
+    .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) { return { date: r.date, status: r.status, memo: r.memo || "",
+      subs: (r.subs || []).map(function (x) { return { at: x.at, kind: x.kind, files: x.files || [], note: x.note || "" }; }) }; });
   var extra = {};
   allCols_(store).forEach(function (c) { if (c.indexOf("s_") !== 0) return;
     extra[c] = asList_(store.getAll(c)).filter(function (d) { return d.sid === sid; }).sort(byDate).slice(0, 100)
@@ -255,9 +290,15 @@ function makeStore_() {
       var all = load(col), row = rowsOf[col][id];
       if (row) { sheet(col).deleteRow(row); delete memo[col]; delete rowsOf[col]; } else delete all[id];
     },
-    saveFile: function (name, type, b64) {
+    saveFile: function (name, type, b64, desc) {
       var blob = Utilities.newBlob(Utilities.base64Decode(b64), type, name);
-      return folder_().createFile(blob).getId();
+      var f = folder_().createFile(blob); if (desc) f.setDescription(desc);
+      return f.getId();
+    },
+    fileDesc: function (id) {
+      try { var f = DriveApp.getFileById(id); var ps = f.getParents(), fid = folder_().getId(), ok = false;
+        while (ps.hasNext()) if (ps.next().getId() === fid) ok = true;
+        return ok ? (f.getDescription() || "") : null; } catch (e) { return null; }
     },
     getFile: function (id) {
       try { var f = DriveApp.getFileById(id); var ps = f.getParents(), fid = folder_().getId(), ok = false;
