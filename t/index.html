@@ -626,7 +626,17 @@ function renderWeek(){
 
 /* ---------- students view ---------- */
 function daysHtml(sel,attr){ return [1,2,3,4,5,6,0].map(n=>`<button type="button" ${attr}="${n}" aria-pressed="${sel.includes(n)}">${DOW[n]}</button>`).join(""); }
+const pendingFiles={};
 function renderStudents(){
+  // 새로고침 때 입력 중이던 내용이 지워지지 않게 보관했다가 되살리기
+  const keep={}; document.querySelectorAll("#slist .tpanel input:not([type=file]), #slist .tpanel select, #slist .tpanel textarea").forEach(el=>{ if(el.id) keep[el.id]=el.value; });
+  const focusId=document.activeElement&&document.activeElement.id;
+  _renderStudents();
+  Object.keys(keep).forEach(id=>{ const el=document.getElementById(id); if(el) el.value=keep[id]; });
+  Object.keys(pendingFiles).forEach(id=>{ const lab=document.getElementById("pf-"+id); if(lab) lab.textContent=pendingFiles[id].length?` ✅ ${pendingFiles[id].length}개 준비됨`:""; });
+  if(focusId){ const el=document.getElementById(focusId); if(el&&el.focus) try{ el.focus(); }catch(e){} }
+}
+function _renderStudents(){
   renderFees();
   $("newDays").innerHTML=daysHtml(newDays,"data-nd");
   const act=scoped();
@@ -693,7 +703,7 @@ function matPanel(s){
       <input class="w2" id="md-${s.id}" type="date" value="${TODAY}" aria-label="날짜">
       <input class="w2" id="mt-${s.id}" placeholder="자료 이름 (예: 10월 분석표)" aria-label="자료 이름" required>
       <input class="w4" id="mc-${s.id}" placeholder="한 줄 설명 (학생에게 보여요)" aria-label="설명">
-      <label class="file">PDF·사진 파일 ${assetsApi?"(여러 개 선택 가능, 파일당 10MB까지)":"(이 계정은 파일을 올릴 수 없어요)"}<br><input id="mf-${s.id}" type="file" accept="application/pdf,image/*" multiple ${assetsApi?"":"disabled"}></label>
+      <label class="file">PDF·사진 파일 ${assetsApi?"(여러 개 선택 가능, 파일당 10MB까지)":"(이 계정은 파일을 올릴 수 없어요)"}<br><input id="mf-${s.id}" type="file" accept="application/pdf,image/*" multiple ${assetsApi?"":"disabled"}><b id="pf-mf-${s.id}" style="color:var(--s-done)"></b></label>
       <button class="act w4" type="submit">자료 올리기</button>
     </form>
     ${list.length?list.map(m=>`<div class="titem"><div>${esc(m.title)} <small>${esc(m.date.slice(5).replace("-","/"))}${m.memo?" · "+esc(m.memo):""}</small></div><span></span><button class="danger" data-mdel="${m.id}">삭제</button>${(m.files||[]).length?`<div class="thumbs">${m.files.map(f=>fileTile(f,m.title)).join("")}</div>`:""}</div>`).join(""):`<p class="hint">아직 올린 자료가 없어요. 분석표 PDF나 사진을 올리면 그 학생 앱 '자료'에 보여요.</p>`}
@@ -711,7 +721,7 @@ function testPanel(s){
       <input id="ts-${s.id}" inputmode="decimal" placeholder="점수" aria-label="점수" required>
       <input id="tm-${s.id}" inputmode="decimal" placeholder="만점" value="100" aria-label="만점">
       <input class="w2" id="tc-${s.id}" placeholder="한 줄 코멘트 (학생에게 보여요)" aria-label="코멘트">
-      <label class="file">시험지 사진 ${assetsApi?"":"(이 계정은 사진을 올릴 수 없어요)"}<br><input id="tp-${s.id}" type="file" accept="image/*" multiple ${assetsApi?"":"disabled"}></label>
+      <label class="file">시험지 사진 ${assetsApi?"":"(이 계정은 사진을 올릴 수 없어요)"}<br><input id="tp-${s.id}" type="file" accept="image/*" multiple ${assetsApi?"":"disabled"}><b id="pf-tp-${s.id}" style="color:var(--s-done)"></b></label>
       <button class="act w4" type="submit">테스트 결과 추가</button>
     </form>
     ${list.length?list.map(t=>`<div class="titem"><div>${esc(t.title)} <small>${esc(t.date.slice(5).replace("-","/"))}${t.memo?" · "+esc(t.memo):""}</small></div><b>${esc(t.score)}${t.total?"/"+esc(t.total):""}</b><button class="danger" data-tdel="${t.id}">삭제</button>${(t.photos||[]).length?`<div class="thumbs">${t.photos.map(id=>`<a href="#" data-fopen="${esc(id)}"><img data-fid="${esc(id)}" alt="${esc(t.title)} 사진"></a>`).join("")}</div>`:""}</div>`).join(""):`<p class="hint">아직 테스트 기록이 없어요.</p>`}
@@ -868,7 +878,7 @@ $("slist").addEventListener("submit",async e=>{
   const mf=e.target.closest("[data-mform]");
   if(mf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
     const sid=mf.dataset.mform; const g=k=>$(k+"-"+sid).value.trim();
-    const files=[...($("mf-"+sid)?.files||[])]; if(!files.length) return toast("올릴 파일을 골라 주세요");
+    const files=pendingFiles["mf-"+sid]||[]; if(!files.length) return toast("올릴 파일을 골라 주세요");
     if(!assetsApi) return toast("이 계정은 파일을 올릴 수 없어요");
     const big=files.find(x=>x.type==="application/pdf"&&x.size>10*1024*1024); if(big) return toast(big.name+" 파일이 10MB보다 커요");
     const data={sid,date:g("md")||TODAY,title:g("mt"),memo:g("mc"),files:[],createdAt:Date.now()}; if(me) data.by=me;
@@ -878,7 +888,7 @@ $("slist").addEventListener("submit",async e=>{
         else { const blob=await shrink(x); const r=await assetsApi.upload(blob,{type:"image/jpeg"}); data.files.push({id:r.id,type:"image/jpeg",name:x.name}); } }
     }catch(err){ btn.disabled=false; btn.textContent="자료 올리기"; return toast("파일을 올리지 못했어요. 다시 시도해 주세요"); }
     btn.disabled=false; btn.textContent="자료 올리기";
-    try{ await db.collection("materials").add(data); toast("자료를 올렸어요 · 학생 앱에 바로 보여요"); renderStudents(); }catch(err){ handleWriteErr(err); }
+    try{ await db.collection("materials").add(data); delete pendingFiles["mf-"+sid]; toast("자료를 올렸어요 · 학생 앱에 바로 보여요"); renderStudents(); }catch(err){ handleWriteErr(err); }
     return; }
   const f=e.target.closest("[data-tform]"); if(!f) return; e.preventDefault();
   if(!db||!canWrite) return toast("보기 전용이에요");
@@ -886,16 +896,24 @@ $("slist").addEventListener("submit",async e=>{
   const sc=g("ts"), tot=g("tm");
   const data={sid,date:g("td")||TODAY,title:g("tt"),score:isNaN(+sc)||sc===""?sc:+sc,total:+tot||0,memo:g("tc"),createdAt:Date.now(),photos:[]};
   if(me) data.by=me;
-  const files=[...($("tp-"+sid)?.files||[])];
+  const files=pendingFiles["tp-"+sid]||[];
   const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
   try{
     for(let i=0;i<files.length;i++){ btn.textContent=`사진 올리는 중 ${i+1}/${files.length}…`; const blob=await shrink(files[i]); const r=await assetsApi.upload(blob,{type:"image/jpeg"}); data.photos.push(r.id); }
   }catch(err){ btn.disabled=false; btn.textContent="테스트 결과 추가"; return toast("사진을 올리지 못했어요. 다시 시도해 주세요"); }
   btn.disabled=false; btn.textContent="테스트 결과 추가";
-  try{ await db.collection("tests").add(data); toast("테스트 결과를 저장했어요"); $("tt-"+sid).value=""; $("ts-"+sid).value=""; $("tc-"+sid).value=""; renderStudents(); }catch(err){ handleWriteErr(err); }
+  try{ await db.collection("tests").add(data); delete pendingFiles["tp-"+sid]; toast("테스트 결과를 저장했어요"); $("tt-"+sid).value=""; $("ts-"+sid).value=""; $("tc-"+sid).value=""; renderStudents(); }catch(err){ handleWriteErr(err); }
 });
 $("slist").addEventListener("change",async e=>{
   if(onFeeChange(e)) return;
+  const fi=e.target.closest('input[type=file]');
+  if(fi){ const id=fi.id, list=pendingFiles[id]||[], lab=document.getElementById("pf-"+id); let bad=0;
+    if(lab) lab.textContent=" 준비 중…";
+    for(const f of [...fi.files]){ try{ const buf=await f.arrayBuffer(); list.push(new File([buf],f.name||"file",{type:f.type||"image/jpeg"})); }catch(err){ bad++; } }
+    pendingFiles[id]=list; fi.value="";
+    const lab2=document.getElementById("pf-"+id); if(lab2) lab2.textContent=list.length?` ✅ ${list.length}개 준비됨`:"";
+    if(bad) toast(`파일 ${bad}개를 읽지 못했어요. 크롬에서 다시 골라 주세요`);
+    return; }
   const cs=e.target.closest("[data-csel]");
   if(cs){ if(!db||!canWrite) return toast("보기 전용이에요"); try{ await db.collection("students").doc(cs.closest(".srow").dataset.sid).update({classId:cs.value}); toast("반을 바꿨어요"); }catch(err){ handleWriteErr(err); } return; }
   const sel=e.target.closest("[data-tsel]"); if(!sel) return; const sid=sel.closest(".srow").dataset.sid;
