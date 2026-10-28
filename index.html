@@ -171,7 +171,7 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fle
     <div style="display:flex;flex-direction:column;gap:20px">
       <div class="me" id="me"></div>
       <div class="kakaotip" id="kakaoTip" hidden>카카오톡 안에서 열려 있어요. 사진 보내기가 잘 안 되면 <a id="openExt" href="#">크롬으로 열기</a>를 눌러 주세요.</div>
-      <section id="upSec">
+      <section id="upSec" hidden>
         <button class="upbtn" id="upOpen" aria-expanded="false">📷 숙제 올리기 <small>사진으로 선생님께 보내요</small></button>
         <div class="card uppanel" id="upPanel" hidden>
           <div class="seg" id="upKind"><button type="button" data-k="hw" aria-pressed="true">오늘 숙제</button><button type="button" data-k="fix" aria-pressed="false">오답 정리</button></div>
@@ -348,7 +348,7 @@ const toB64=blob=>new Promise((ok,bad)=>{ const fr=new FileReader(); fr.onload=(
 const IN_KAKAO=/KAKAOTALK/i.test(navigator.userAgent);
 function drawPrev(){ $("upPrev").innerHTML=upList.map((f,i)=>`<div><img src="${f.url}" alt="고른 사진 ${i+1}"><button type="button" data-rm="${i}" aria-label="사진 빼기">✕</button></div>`).join("");
   $("upPick").firstChild.textContent = upList.length ? `📸 사진 더 추가하기 (${upList.length}장)` : "📸 사진 찍기 / 고르기"; }
-if(IN_KAKAO){ $("kakaoTip").hidden=false; $("openExt").href="kakaotalk://web/openExternal?url="+encodeURIComponent(location.href.split("#")[0]); }
+if(false&&IN_KAKAO){ $("kakaoTip").hidden=false; $("openExt").href="kakaotalk://web/openExternal?url="+encodeURIComponent(location.href.split("#")[0]); }
 $("upOpen").onclick=()=>{ const p=$("upPanel"); p.hidden=!p.hidden; $("upOpen").setAttribute("aria-expanded",!p.hidden); if(!p.hidden){ $("upMsg").textContent=""; $("upMsg").className="upmsg"; } };
 $("upKind").onclick=e=>{ const b=e.target.closest("[data-k]"); if(!b||b.disabled) return; upKind=b.dataset.k; setupUpload(); };
 $("upFiles").onchange=async e=>{
