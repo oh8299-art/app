@@ -629,12 +629,18 @@ function renderWeek(){
 /* ---------- students view ---------- */
 function daysHtml(sel,attr){ return [1,2,3,4,5,6,0].map(n=>`<button type="button" ${attr}="${n}" aria-pressed="${sel.includes(n)}">${DOW[n]}</button>`).join(""); }
 const pendingFiles={}, formStatus={};
-function setFS(id,text,cls){ formStatus[id]={text,cls}; const el=document.getElementById("fs-"+id); if(el){ el.textContent=text; el.className="fmsg w4 "+(cls||""); } }
+const fsTimers={};
+function setFS(id,text,cls){
+  clearInterval(fsTimers[id]);
+  if(cls==="run"){ const t0=Date.now(); fsTimers[id]=setInterval(()=>{ const el=document.getElementById("fs-"+id); const sec=Math.round((Date.now()-t0)/1000); if(el) el.textContent=text+` (${sec}초)`; },1000); }
+  formStatus[id]={text,cls}; const el=document.getElementById("fs-"+id); if(el){ el.textContent=text; el.className="fmsg w4 "+(cls||""); } }
 async function uploadAll(files,kind,onEach){ // 2장씩 동시에 올리기
   const out=new Array(files.length); let next=0, done=0;
   async function worker(){ while(next<files.length){ const i=next++; const x=files[i];
       let blob, type="image/jpeg";
-      if(x.type==="application/pdf"){ blob=x; type="application/pdf"; } else { try{ blob=await shrink(x); }catch(e){ throw new Error(`${i+1}번째 사진: ${e.message||"사진을 줄이지 못했어요"}`); } }
+      const isPdf=x.type==="application/pdf"||/\.pdf$/i.test(x.name||"");
+      if(isPdf){ blob=x; type="application/pdf"; }
+      else { try{ blob=await Promise.race([shrink(x),new Promise((_,bad)=>setTimeout(()=>bad(new Error("사진을 줄이는 데 너무 오래 걸려요. 다른 사진으로 해 주세요")),25000))]); }catch(e){ throw new Error(`${i+1}번째 사진: ${e.message||"사진을 줄이지 못했어요"}`); } }
       let r; try{ r=await assetsApi.upload(blob,{type}); }catch(e){ throw new Error(`${i+1}번째 파일: ${e.message||"올리지 못했어요"}`); }
       out[i]={id:r.id,type,name:x.name||""}; done++; onEach&&onEach(done); } }
   await Promise.all([worker(),worker()]);
