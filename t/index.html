@@ -176,6 +176,10 @@ tr:last-child td{border-bottom:0}
 .sub1 .thumbs{width:100%}
 .fmsg{margin:0;font-size:14px;font-weight:600;min-height:1.2em;grid-column:1/-1}
 .fmsg.bad{color:#d0453b} .fmsg.ok{color:var(--s-done)} .fmsg.run{color:var(--accent)}
+#bulkTable td,#bulkTable th{text-align:left;padding:6px 8px;font-size:13px;white-space:nowrap}
+#bulkTable select{max-width:180px}
+#bulkTable tr.warn td{background:var(--s-fix-bg)}
+#bulkTable tr.skip td{color:var(--muted)}
 .ftile{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:12px;text-decoration:none;max-width:100%}
 .ftile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
 .wrap.locked header .tabs,.wrap.locked header .scope,.wrap.locked > section:not(#v-login){display:none!important}
@@ -335,6 +339,18 @@ tr:last-child td{border-bottom:0}
           </form>
           <p class="hint">학생마다 금액이 다르면 아래 학생 칸의 '교재비' 버튼으로 따로 안내하세요.</p>
         </details>
+      </div>
+      <div class="form" id="bulkBox">
+        <h3>분석표 PDF 한꺼번에 올리기</h3>
+        <p class="hint" style="font-size:13px">학생 한 명당 한 쪽인 분석표 PDF(예: TOMA 보고서)를 고르면, 이름을 찾아 학생별 '자료'로 나눠 저장해요.</p>
+        <label class="file">PDF 고르기<br><input type="file" id="bulkFile" accept="application/pdf,.pdf"></label>
+        <p class="fmsg" id="bulkMsg"></p>
+        <div id="bulkOpts" hidden style="display:flex;flex-direction:column;gap:8px">
+          <div class="frow"><input id="bulkTitle" aria-label="자료 이름" placeholder="자료 이름"><input id="bulkDate" type="date" aria-label="날짜"></div>
+          <label style="font-size:14px;display:flex;gap:8px;align-items:center"><input type="checkbox" id="bulkTest" checked style="width:18px;height:18px"> 점수를 '테스트 기록'에도 저장하기</label>
+          <div class="gridwrap"><table id="bulkTable"></table></div>
+          <button class="act" type="button" id="bulkGo">선택한 학생 저장하기</button>
+        </div>
       </div>
       <form class="form" id="classForm">
         <h3>반 만들기</h3>
@@ -982,6 +998,106 @@ function subscribeRecs(){
     if(!document.activeElement||!document.activeElement.matches("[data-memo]")) render();
   });
 }
+
+/* ---------- 분석표 PDF 한꺼번에 ---------- */
+let bulk=null; // {bytes, rows:[{page,name,school,grade,score,pct,lvl,award,sid,warn,on}]}
+async function loadPdfLibs(){
+  if(!window.PDFLib) await new Promise((ok,bad)=>{ const sc=document.createElement("script"); sc.src="lib/pdf-lib.min.js"; sc.onload=ok; sc.onerror=()=>bad(new Error("PDF 도구를 불러오지 못했어요")); document.head.appendChild(sc); });
+  if(!window._pdfjs){ let m, base;
+    try{ m=await import("./lib/pdf.min.mjs"); base=new URL("lib/",location.href).href; }
+    catch(e){ base="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/"; m=await import(base+"pdf.min.mjs"); }
+    m.GlobalWorkerOptions.workerSrc=base+"pdf.worker.min.mjs"; window._pdfjs=m; }
+  return window._pdfjs;
+}
+function parseReport(t){
+  const r={};
+  const m=t.match(/보고서\s+(\S+?)\s+(초등학교|중학교|고등학교)\s*(\d)\s*학년/); if(m){ r.name=m[1].replace(/\d+$/,""); r.school=m[2]; r.grade=+m[3]; }
+  const tt=t.match(/^(.*?보고서)/); r.title=tt?tt[1].trim():"";
+  const sc=t.match(/점수\s*(\d+(?:\.\d+)?)\s*점/); if(sc) r.score=+sc[1];
+  const pc=t.match(/백분위\s*(\d+(?:\.\d+)?)\s*%/); if(pc) r.pct=+pc[1];
+  const lv=t.match(/등급\s*(\d)\s*등급/); if(lv) r.lvl=+lv[1];
+  const aw=t.match(/수상\s*(\S+?상)(?=\s|$)/); if(aw) r.award=aw[1];
+  return r;
+}
+function guessStudent(name,school,grade){
+  const act=students.filter(x=>x.active!==false&&x.name===name);
+  if(!act.length) return {sid:"",warn:"등록 안 된 학생"};
+  const gtxt=String(grade||"")+"학년";
+  const score=x=>{ const g=String(x.grade||""); let v=0; if(g.includes(gtxt)) v+=4; else if(!g) v+=1; else v-=5; if(x.classId) v+=1; return v; };
+  const sorted=act.slice().sort((a,b)=>score(b)-score(a));
+  const best=sorted[0];
+  if(score(best)<0) return {sid:"",warn:"학년이 다른 학생만 있어요"};
+  const ties=sorted.filter(x=>score(x)>=0);
+  return {sid:best.id, warn: ties.length>1 ? `같은 이름 ${ties.length}명 · 확인해 주세요` : ""};
+}
+function studentLabel(x){ return `${x.name}${x.grade?" ("+x.grade+")":""}${className(x.classId)?" · "+className(x.classId):""}`; }
+function renderBulk(){
+  if(!bulk) return;
+  const act=students.filter(x=>x.active!==false).slice().sort((a,b)=>a.name.localeCompare(b.name,"ko"));
+  const on=bulk.rows.filter(r=>r.on&&r.sid).length;
+  $("bulkTable").innerHTML=`<tr><th>저장</th><th>쪽</th><th>PDF 속 이름</th><th>결과</th><th>저장할 학생</th></tr>`+bulk.rows.map((r,i)=>`<tr class="${!r.sid||!r.on?"skip":r.warn?"warn":""}">
+    <td><input type="checkbox" data-bon="${i}" ${r.on&&r.sid?"checked":""} ${r.sid?"":"disabled"} style="width:18px;height:18px"></td><td>${r.page}</td>
+    <td><b>${esc(r.name||"?")}</b> ${r.grade?`<small>${r.school==="중학교"?"중":"초"}${r.grade}</small>`:""}</td>
+    <td>${r.score!=null?r.score+"점":""}${r.lvl?" · "+r.lvl+"등급":""}${r.award?" · "+esc(r.award):""}</td>
+    <td><select class="tsel" data-bsel="${i}"><option value="">건너뛰기</option>${act.map(x=>`<option value="${x.id}" ${x.id===r.sid?"selected":""}>${esc(studentLabel(x))}</option>`).join("")}</select>${r.warn?`<div style="font-size:11px;color:var(--s-fix)">⚠ ${esc(r.warn)}</div>`:""}${r.done?`<div style="font-size:11px;color:var(--s-done)">✅ 저장됨</div>`:""}${r.err?`<div style="font-size:11px;color:#d0453b">${esc(r.err)}</div>`:""}</td></tr>`).join("");
+  $("bulkGo").textContent=`선택한 ${on}명 저장하기`;
+}
+$("bulkFile").addEventListener("change",async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  const msg=$("bulkMsg"); msg.className="fmsg run"; msg.textContent="PDF 읽는 중…"; $("bulkOpts").hidden=true;
+  try{
+    const bytes=new Uint8Array(await f.arrayBuffer());
+    const pdfjs=await loadPdfLibs();
+    const doc=await pdfjs.getDocument({data:bytes.slice(), cMapUrl:new URL("lib/cmaps/",location.href).href, cMapPacked:true}).promise;
+    const rows=[];
+    for(let i=1;i<=doc.numPages;i++){ msg.textContent=`PDF 읽는 중 ${i}/${doc.numPages}…`;
+      const pg=await doc.getPage(i); const tc=await pg.getTextContent(); const t=tc.items.map(x=>x.str).join(" ").replace(/\s+/g," ");
+      const r=parseReport(t); r.page=i; const g=r.name?guessStudent(r.name,r.school,r.grade):{sid:"",warn:"이름을 찾지 못했어요"};
+      r.sid=g.sid; r.warn=g.warn; r.on=!!g.sid; rows.push(r); }
+    bulk={bytes,rows,fileName:f.name};
+    $("bulkTitle").value=(rows.find(r=>r.title)||{}).title||f.name.replace(/\.pdf$/i,"");
+    if(!$("bulkDate").value) $("bulkDate").value=TODAY;
+    const ok=rows.filter(r=>r.sid).length, warn=rows.filter(r=>r.sid&&r.warn).length;
+    msg.className="fmsg ok"; msg.textContent=`${rows.length}쪽 중 ${ok}명을 찾았어요.${warn?` ⚠ ${warn}명은 같은 이름이 있어 확인이 필요해요.`:""}${rows.length-ok?` 못 찾은 ${rows.length-ok}명은 건너뛰어요(아래에서 직접 고를 수 있어요).`:""}`;
+    $("bulkOpts").hidden=false; renderBulk();
+  }catch(err){ msg.className="fmsg bad"; msg.textContent="PDF를 읽지 못했어요: "+(err.message||err)+" · 크롬에서 다시 해 주세요."; }
+});
+$("bulkTable").addEventListener("change",e=>{
+  const s1=e.target.closest("[data-bsel]"); if(s1){ const r=bulk.rows[+s1.dataset.bsel]; r.sid=s1.value; r.on=!!r.sid; r.warn=""; renderBulk(); return; }
+  const c=e.target.closest("[data-bon]"); if(c){ bulk.rows[+c.dataset.bon].on=c.checked; renderBulk(); }
+});
+$("bulkGo").addEventListener("click",async()=>{
+  if(!bulk) return; if(!db||!canWrite) return toast("보기 전용이에요");
+  const todo=bulk.rows.filter(r=>r.on&&r.sid&&!r.done); if(!todo.length) return toast("저장할 학생을 골라 주세요");
+  const title=$("bulkTitle").value.trim()||"분석표", date=$("bulkDate").value||TODAY, withTest=$("bulkTest").checked;
+  const btn=$("bulkGo"), msg=$("bulkMsg"); btn.disabled=true; SN.busy.n++;
+  let done=0, skipped=0, failed=0;
+  try{
+    const src=await PDFLib.PDFDocument.load(bulk.bytes);
+    let next=0;
+    async function worker(){ while(next<todo.length){ const r=todo[next++];
+        try{
+          if(materials.some(m=>m.sid===r.sid&&m.title===title&&m.date===date)){ r.done=true; r.err=""; skipped++; continue; }
+          const one=await PDFLib.PDFDocument.create(); const [pg]=await one.copyPages(src,[r.page-1]); one.addPage(pg);
+          const st=students.find(x=>x.id===r.sid);
+          const fname=`${st?st.name:r.name}_${title}.pdf`.replace(/[\\/:*?"<>|]/g,"");
+          const blob=new Blob([await one.save()],{type:"application/pdf"});
+          const up=await assetsApi.upload(Object.assign(blob,{name:fname}),{type:"application/pdf"});
+          const memo=[r.score!=null?`점수 ${r.score}점`:"", r.pct!=null?`백분위 ${r.pct}%`:"", r.lvl?`${r.lvl}등급`:"", r.award||""].filter(Boolean).join(" · ");
+          const md={sid:r.sid,date,title,memo,files:[{id:up.id,type:"application/pdf",name:fname}],createdAt:Date.now()}; if(me) md.by=me;
+          await db.collection("materials").add(md);
+          if(withTest&&r.score!=null){ const td={sid:r.sid,date,title,score:r.score,total:100,memo:[r.pct!=null?`백분위 ${r.pct}%`:"",r.lvl?`${r.lvl}등급`:"",r.award||""].filter(Boolean).join(" · "),createdAt:Date.now(),photos:[]}; if(me) td.by=me; await db.collection("tests").add(td); }
+          r.done=true; r.err=""; done++;
+        }catch(err){ r.err=(err.serverMessage||err.message||"저장 실패"); failed++; }
+        msg.className="fmsg run"; msg.textContent=`저장 중 ${done+skipped+failed}/${todo.length}… 화면을 닫지 말아 주세요`; renderBulk(); } }
+    msg.className="fmsg run"; msg.textContent=`저장 중 0/${todo.length}… 화면을 닫지 말아 주세요`;
+    await Promise.all([worker(),worker()]);
+    msg.className = failed?"fmsg bad":"fmsg ok";
+    msg.textContent=`✅ ${done}명 저장했어요.${skipped?` ${skipped}명은 이미 같은 자료가 있어 건너뛰었어요.`:""}${failed?` ❗ ${failed}명은 실패했어요 · 다시 누르면 실패한 학생만 다시 저장해요.`:" 학생 앱 '자료'에 바로 보여요."}`;
+  }catch(err){ msg.className="fmsg bad"; msg.textContent="저장하지 못했어요: "+(err.message||err); }
+  finally{ SN.busy.n--; btn.disabled=false; renderBulk(); renderStudents(); }
+});
+
 async function doLogin(code,silent){
   const r=await SN.API.call({op:"login",code});
   if(!r.ok||r.role==="student"){
