@@ -222,6 +222,19 @@ async function photoUrl(ph){
   const bin=atob(r.b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
   return (urlCache[id]=URL.createObjectURL(new Blob([arr],{type:r.type||(ph&&ph.t)||"image/jpeg"})));
 }
+let pdfLib=null;
+async function getPdfjs(){ if(pdfLib) return pdfLib;
+  const base=new URL("t/lib/",location.href).href; let m;
+  try{ m=await import(base+"pdf.min.mjs"); m.GlobalWorkerOptions.workerSrc=base+"pdf.worker.min.mjs"; m._cmap=base+"cmaps/"; }
+  catch(e){ const cdn="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/"; m=await import(cdn+"pdf.min.mjs"); m.GlobalWorkerOptions.workerSrc=cdn+"pdf.worker.min.mjs"; m._cmap="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/cmaps/"; }
+  return (pdfLib=m); }
+async function renderPdf(url,box){
+  const lib=await getPdfjs(); const data=new Uint8Array(await (await fetch(url)).arrayBuffer());
+  const doc=await lib.getDocument({data,cMapUrl:lib._cmap,cMapPacked:true}).promise;
+  box.innerHTML=""; const W=Math.min(1400,Math.round((box.clientWidth||340)*(window.devicePixelRatio||1)*1.5));
+  for(let i=1;i<=doc.numPages;i++){ const pg=await doc.getPage(i); const v0=pg.getViewport({scale:1}); const vp=pg.getViewport({scale:W/v0.width});
+    const c=document.createElement("canvas"); c.width=vp.width; c.height=vp.height; c.style.cssText="width:100%;height:auto;display:block;border-radius:8px;border:1px solid #e5e7eb;margin:8px 0;background:#fff";
+    await pg.render({canvas:c,canvasContext:c.getContext("2d"),viewport:vp}).promise; box.appendChild(c); } }
 api({op:"top"}).then(r=>{ if(r&&r.ok){ D=Object.assign(D,r); titles(); $("rank1").innerHTML=rankHtml(null); } });
 
 function rankHtml(myName){
@@ -302,7 +315,11 @@ function renderMain(p){
     if(f.t!=="application/pdf" && box.childElementCount){ box.hidden=!box.hidden; return; }
     const lab=b.querySelector("small"); lab.textContent="여는 중…"; b.disabled=true;
     try{ const u=await photoUrl(f);
-      if(f.t==="application/pdf"){ box.hidden=false; box.innerHTML=`<a class="fbtn" href="${u}" target="_blank" rel="noopener" download="${esc(f.n||"자료.pdf")}"><span>PDF 열기 / 저장하기</span><small>▶</small></a>`; try{ window.open(u,"_blank"); }catch(_){} lab.textContent="열림"; }
+      if(f.t==="application/pdf"){ if(box.childElementCount){ box.hidden=!box.hidden; lab.textContent=box.hidden?"열기":"접기"; b.disabled=false; return; }
+        box.hidden=false; box.innerHTML=`<p class="sub">PDF를 화면에 펼치는 중…</p>`;
+        try{ await renderPdf(u,box); }catch(e2){ console.error(e2); box.innerHTML=`<p class="sub">화면에 바로 보여주지 못했어요. 아래 버튼을 눌러 주세요.</p>`; }
+        box.insertAdjacentHTML("beforeend",`<a class="fbtn" href="${u}" target="_blank" rel="noopener" download="${esc(f.n||"자료.pdf")}"><span>PDF 파일로 저장하기</span><small>⬇</small></a>`);
+        lab.textContent="접기"; }
       else { box.innerHTML=`<img src="${u}" alt="${esc(f.n||"자료 사진")}">`; box.hidden=false; lab.textContent="접기/펼치기"; }
     }catch(err){ lab.textContent="열 수 없어요"; }
     b.disabled=false; };
