@@ -133,6 +133,12 @@ section{display:flex;flex-direction:column;gap:10px}
 .hw .subs .photos{display:flex;flex-direction:column;gap:6px}
 .kakaotip{background:var(--s-fix-bg);border-radius:12px;padding:10px 14px;font-size:14px;line-height:1.5}
 .kakaotip a{color:var(--accent);font-weight:700}
+.mtools{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}
+.mtools input{width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:11px 12px;font:15px var(--f-body)}
+.mchips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.mchips button{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:600 13px var(--f-body);cursor:pointer}
+.mchips button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.more{width:100%;border:0;border-top:1px solid var(--line);background:transparent;color:var(--accent);padding:12px;font:700 14px var(--f-body);cursor:pointer}
 .mat{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}
 .card .mat:first-child,.dgrp+.mat{border-top:0}
 .mat .tt{font-weight:700}
@@ -186,8 +192,10 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fle
       </section>
       <section id="feeSec" hidden><h2>교재비</h2><div class="card" id="fees"></div></section>
       <section><h2>숙제 안내</h2><div class="nlist" id="notices"></div></section>
+      <section><div class="shead"><h2>자료 모음</h2><span class="sub" id="matCnt"></span></div>
+        <div class="mtools" id="matTools" hidden><input type="search" id="matQ" placeholder="🔍 자료 이름으로 찾기 (예: 분석표)" aria-label="자료 찾기"><div class="mchips" id="matMon"></div></div>
+        <div class="card" id="mats"></div></section>
       <section><h2>테스트 기록</h2><div class="card" id="tests"></div></section>
-      <section><h2>자료</h2><div class="card" id="mats"></div></section>
       <section><div class="shead"><h2 id="rankTitle2">숙제왕 TOP 10</h2><div class="seg" data-seg="2"><button data-rp="week" aria-pressed="false">이번 주</button><button data-rp="month" aria-pressed="true">이번 달</button></div></div><div class="card" id="rank2"></div></section>
       <section><h2>최근 숙제</h2><div class="card" id="hw"></div></section>
       <footer><span class="sub" id="upd"></span><button class="link" id="logout">다른 코드로 열기</button></footer>
@@ -215,7 +223,7 @@ titles();
 document.addEventListener("click",e=>{ const b=e.target.closest(".seg [data-rp]"); if(!b) return; period=b.dataset.rp; titles(); $("rank1").innerHTML=rankHtml(null); if(ME) $("rank2").innerHTML=rankHtml(ME); });
 
 function norm(c){ return String(c||"").replace(/\D/g,""); }
-const urlCache={};
+const urlCache={}; const matSt={q:"",mon:"all",n:12};
 async function photoUrl(ph){
   const id=typeof ph==="string"?ph:ph.id; if(urlCache[id]) return urlCache[id];
   const r=await api({op:"file",code:CODE,id}); if(!r.ok) throw new Error(r.message||"photo");
@@ -307,11 +315,28 @@ function renderMain(p){
     if(open&&!box.childElementCount){ box.innerHTML=`<p class="sub">사진 여는 중…</p>`;
       Promise.all((t.photos||[]).map(ph=>photoUrl(ph).catch(()=>null))).then(urls=>{ box.innerHTML=urls.map((u,i)=>u?`<img src="${u}" alt="${esc(t.title)} 시험지 ${i+1}">`:`<p class="sub">사진 ${i+1}을 열 수 없어요.</p>`).join(""); }); }
     box.hidden=!open; el.setAttribute("aria-expanded",open); el.querySelector(".ph").textContent=`시험지 사진 ${t.photos.length}장 ${open?"접기 ▴":"보기 ▾"}`; };
-  const mats=(p.materials||[]); let lastM=null;
-  $("mats").innerHTML = mats.length ? mats.map((m,mi)=>{ const d=fmtD(m.date); const hdr=m.date!==lastM?`<div class="dgrp">${d.md.replace("/","월 ")}일 (${d.dow})</div>`:""; lastM=m.date;
-      return hdr+`<div class="mat"><div class="tt">${esc(m.title||"자료")}</div>${m.memo?`<div class="cm">${esc(m.memo)}</div>`:""}<div class="files">${(m.files||[]).map((f,fi)=>`<button class="fbtn" data-mi="${mi}" data-fi="${fi}">${f.t==="application/pdf"?"📄":"🖼️"}<span>${esc(f.n||(f.t==="application/pdf"?"PDF 파일":"사진"))}</span><small>열기</small></button><div class="photos" data-box="${mi}-${fi}" hidden></div>`).join("")}</div></div>`; }).join("")
-    : `<div class="empty">아직 받은 자료가 없어요.<br>선생님이 분석표나 자료를 올리면 여기에 쌓여요.</div>`;
-  $("mats").onclick=async e=>{ const b=e.target.closest(".fbtn[data-mi]"); if(!b||b.disabled) return; const f=mats[+b.dataset.mi].files[+b.dataset.fi]; const box=$("mats").querySelector(`[data-box="${b.dataset.mi}-${b.dataset.fi}"]`);
+  const mats=(p.materials||[]);
+  const mons=[...new Set(mats.map(m=>m.date.slice(0,7)))];
+  $("matCnt").textContent=mats.length?`모두 ${mats.length}개`:"";
+  $("matTools").hidden=mats.length<4;
+  if(matSt.mon!=="all"&&!mons.includes(matSt.mon)) matSt.mon="all";
+  const drawMats=()=>{
+    $("matMon").innerHTML=[["all","전체"]].concat(mons.map(m=>[m,(m.slice(0,4)!==mons[0].slice(0,4)?m.slice(2,4)+"년 ":"")+(+m.slice(5))+"월"])).map(([v,l])=>`<button type="button" data-mon="${v}" aria-pressed="${matSt.mon===v}">${l}</button>`).join("");
+    const q=matSt.q.trim().toLowerCase();
+    const idx=mats.map((m,i)=>i).filter(i=>{ const m=mats[i]; if(matSt.mon!=="all"&&m.date.slice(0,7)!==matSt.mon) return false;
+      return !q||[m.title,m.memo,...(m.files||[]).map(f=>f.n)].join(" ").toLowerCase().includes(q); });
+    const shown=idx.slice(0,matSt.n); let lastM=null;
+    $("mats").innerHTML = !mats.length ? `<div class="empty">아직 받은 자료가 없어요.<br>선생님이 수업 자료나 분석표를 올리면 여기에 차곡차곡 쌓여요.</div>`
+      : !idx.length ? `<div class="empty">찾는 자료가 없어요.</div>`
+      : shown.map(mi=>{ const m=mats[mi]; const d=fmtD(m.date); const hdr=m.date!==lastM?`<div class="dgrp">${d.md.replace("/","월 ")}일 (${d.dow})</div>`:""; lastM=m.date;
+        return hdr+`<div class="mat"><div class="tt">${esc(m.title||"자료")}</div>${m.memo?`<div class="cm">${esc(m.memo)}</div>`:""}<div class="files">${(m.files||[]).map((f,fi)=>`<button class="fbtn" data-mi="${mi}" data-fi="${fi}">${f.t==="application/pdf"?"📄":"🖼️"}<span>${esc(f.n||(f.t==="application/pdf"?"PDF 파일":"사진"))}</span><small>열기</small></button><div class="photos" data-box="${mi}-${fi}" hidden></div>`).join("")}</div></div>`; }).join("")
+        + (idx.length>shown.length?`<button type="button" class="more" data-more>더 보기 (${idx.length-shown.length}개 더)</button>`:"");
+  };
+  drawMats();
+  $("matQ").value=matSt.q;
+  $("matQ").oninput=()=>{ matSt.q=$("matQ").value; matSt.n=12; drawMats(); };
+  $("matMon").onclick=e=>{ const b=e.target.closest("[data-mon]"); if(!b) return; matSt.mon=b.dataset.mon; matSt.n=12; drawMats(); };
+  $("mats").onclick=async e=>{ if(e.target.closest("[data-more]")){ matSt.n+=20; drawMats(); return; } const b=e.target.closest(".fbtn[data-mi]"); if(!b||b.disabled) return; const f=mats[+b.dataset.mi].files[+b.dataset.fi]; const box=$("mats").querySelector(`[data-box="${b.dataset.mi}-${b.dataset.fi}"]`);
     if(f.t!=="application/pdf" && box.childElementCount){ box.hidden=!box.hidden; return; }
     const lab=b.querySelector("small"); lab.textContent="여는 중…"; b.disabled=true;
     try{ const u=await photoUrl(f);

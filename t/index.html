@@ -120,6 +120,8 @@ tr:last-child td{border-bottom:0}
 .srow .who{flex:1 1 120px;min-width:0}
 .danger{border:0;background:transparent;color:#d0453b;font:600 13px var(--f-body);cursor:pointer;padding:6px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20}
+body:has(#upq:not([hidden])) .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+body:has(#upq:not([hidden])){padding-bottom:90px}
 .hint{font-size:12px;color:var(--muted);margin:0}
 .srow .tools{display:flex;gap:6px;flex-wrap:wrap;width:100%;align-items:center}
 .code{font:700 14px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.12em;background:var(--sunk);border-radius:7px;padding:4px 8px}
@@ -251,6 +253,18 @@ tr:last-child td{border-bottom:0}
         <button class="iconbtn" id="nextDay" aria-label="다음 날">›</button>
         <button class="todaybtn" id="goToday">오늘</button>
       </div>
+      <details class="form" id="cmBox">
+        <summary style="cursor:pointer;font:700 15px var(--f-body);list-style:none;display:flex;align-items:center;gap:8px"><span>📚 수업 자료 올리기<br><small class="hint" style="font-weight:400">수업 끝나고 사진·PDF를 반 학생 모두에게 한 번에</small></span><span style="margin-left:auto" class="hint">▾</span></summary>
+        <form class="tform" id="cmForm" novalidate style="margin-top:10px">
+          <select class="w2 tsel" id="cmClass" aria-label="반" style="max-width:none"></select>
+          <input class="w2" id="cmDate" type="date" aria-label="날짜">
+          <div class="w4" id="cmKids" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          <input class="w4" id="cmTitle" placeholder="자료 이름 (예: 11/14 수업 판서)" aria-label="자료 이름">
+          <input class="w4" id="cmMemo" placeholder="한 줄 설명 (선택 · 학생에게 보여요)" aria-label="설명">
+          <label class="file">📷 사진 찍기 / 사진·PDF 고르기 (여러 개 가능)<br><input id="cmFile" type="file" accept="image/*,application/pdf" multiple></label><b id="pf-cmFile" style="color:var(--s-done);grid-column:1/-1"></b>
+          <button class="act w4" type="submit">올리기 (뒤에서 올라가요)</button><p class="fmsg w4" id="fs-cmFile"></p>
+        </form>
+      </details>
       <div class="summary">
         <div class="bar" id="bar"></div>
         <div class="chips" id="chips"></div>
@@ -369,6 +383,10 @@ tr:last-child td{border-bottom:0}
       <div class="list" id="slist"></div>
     </div>
   </section>
+</div>
+<div id="upq" hidden role="status" aria-live="polite" style="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:60;width:min(520px,calc(100% - 24px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:10px 12px;font-size:13px">
+  <div style="display:flex;gap:8px;align-items:center"><b id="upqText" style="flex:1"></b><button type="button" class="ghost" id="upqBtn" hidden style="padding:4px 10px;font-size:12px"></button></div>
+  <div style="height:6px;background:var(--sunk);border-radius:4px;margin-top:7px;overflow:hidden"><div id="upqBar" style="height:100%;width:0;background:var(--accent);transition:width .3s"></div></div>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -661,9 +679,103 @@ async function uploadAll(files,kind,onEach){ // 2장씩 동시에 올리기
       else { try{ blob=await Promise.race([shrink(x),new Promise((_,bad)=>setTimeout(()=>bad(new Error("사진을 줄이는 데 너무 오래 걸려요. 다른 사진으로 해 주세요")),25000))]); }catch(e){ throw new Error(`${i+1}번째 사진: ${e.message||"사진을 줄이지 못했어요"}`); } }
       let r; try{ r=await assetsApi.upload(blob,{type}); }catch(e){ throw new Error(`${i+1}번째 파일: ${e.message||"올리지 못했어요"}`); }
       out[i]={id:r.id,type,name:x.name||""}; done++; onEach&&onEach(done); } }
-  await Promise.all([worker(),worker()]);
+  await Promise.all([worker(),worker(),worker()]);
   return out;
 }
+/* ---------- 자료 올리기 대기줄 (뒤에서 올라가요 · 앱을 닫았다 열어도 이어서) ---------- */
+const UQ=(()=>{
+  let jobs=[], running=false, t0=0, idb=null;
+  const openDb=()=>idb||(idb=new Promise(ok=>{ try{ const r=indexedDB.open("sn-upq",1); r.onupgradeneeded=()=>r.result.createObjectStore("jobs",{keyPath:"id"}); r.onsuccess=()=>ok(r.result); r.onerror=()=>ok(null); }catch(e){ ok(null); } }));
+  async function tx(fn){ const d=await openDb(); if(!d) return null; return new Promise(ok=>{ try{ const t=d.transaction("jobs","readwrite"); const st=t.objectStore("jobs"); const r=fn(st); t.oncomplete=()=>ok(r&&r.result); t.onerror=()=>ok(null); }catch(e){ ok(null); } }); }
+  const save=j=>tx(st=>st.put(j)), drop=id=>tx(st=>st.delete(id));
+  const total=()=>jobs.reduce((a,j)=>a+j.files.length,0), doneN=()=>jobs.reduce((a,j)=>a+j.done.filter(Boolean).length,0);
+  let tick=null;
+  function bar(msg,btn){
+    const box=$("upq"); if(!box) return;
+    if(!jobs.length&&!msg){ box.hidden=true; clearInterval(tick); tick=null; return; }
+    box.hidden=false;
+    const T=total(), D=doneN(), sec=Math.round((Date.now()-t0)/1000);
+    $("upqText").textContent = msg || `⬆ 자료 올리는 중 ${D}/${T}개 · ${jobs[0]?jobs[0].label:""} (${sec}초) — 다른 일 하셔도 돼요`;
+    $("upqBar").style.width=(T?Math.round(D/T*100):100)+"%";
+    const b=$("upqBtn"); b.hidden=!btn; if(btn){ b.textContent=btn.text; b.onclick=btn.fn; }
+    if(running&&!tick) tick=setInterval(()=>{ if(running) bar(); },1000);
+  }
+  async function add(o){
+    const j={id:"j"+Date.now()+Math.random().toString(36).slice(2,6),sids:o.sids,date:o.date,title:o.title,memo:o.memo||"",label:o.label||o.title,by:me||"",files:o.files.slice(),done:o.files.map(()=>null),createdAt:Date.now()};
+    jobs.push(j); await save(j); run(); }
+  async function upOne(j,i){
+    const x=j.files[i]; const isPdf=x.type==="application/pdf"||/\.pdf$/i.test(x.name||"");
+    let blob=x, type="application/pdf";
+    if(!isPdf){ type="image/jpeg"; blob=await Promise.race([shrink(x),new Promise((_,bad)=>setTimeout(()=>bad(new Error("사진을 줄이는 데 너무 오래 걸려요")),25000))]); }
+    let last; for(let k=0;k<3;k++){ try{ const r=await assetsApi.upload(blob,{type}); return {id:r.id,type,name:x.name||""}; }catch(e){ last=e; await new Promise(r=>setTimeout(r,1500*(k+1))); } }
+    throw new Error(`${x.name||(i+1)+"번째 파일"}: ${last&&last.message||"올리지 못했어요"}`);
+  }
+  async function run(){
+    if(running||!jobs.length||!db||!assetsApi) { bar(); return; }
+    running=true; t0=Date.now(); bar();
+    try{
+      while(jobs.length){
+        const j=jobs[0];
+        const todo=j.done.map((d,i)=>d?null:i).filter(i=>i!==null);
+        let next=0;
+        const worker=async()=>{ while(next<todo.length){ const i=todo[next++]; j.done[i]=await upOne(j,i); save(j); bar(); } };
+        await Promise.all([worker(),worker(),worker()]);
+        const now=Date.now();
+        const items=j.sids.map(sid=>{ const d={sid,date:j.date,title:j.title,memo:j.memo,files:j.done,createdAt:now}; if(j.by) d.by=j.by; return d; });
+        await db.collection("materials").addMany(items);
+        jobs.shift(); await drop(j.id);
+        toast(`✅ ${j.label} 자료를 올렸어요 · 학생 앱에 보여요`);
+      }
+      running=false; bar(`✅ 다 올렸어요! 학생 앱 '자료'에 쌓였어요.`); setTimeout(()=>{ if(!jobs.length&&!running) bar(); },4000);
+    }catch(err){
+      running=false;
+      bar(`⚠ ${err.serverMessage||err.message||"올리지 못했어요"} — 인터넷을 확인하고 다시 눌러 주세요`,{text:"다시 올리기",fn:()=>run()});
+    }
+  }
+  async function resume(){ const got=await tx(st=>st.getAll()); if(got&&got.length){ jobs=got.sort((a,b)=>a.createdAt-b.createdAt); bar(`이어서 올릴 자료가 ${jobs.length}건 있어요`,{text:"이어서 올리기",fn:()=>run()}); run(); } }
+  async function cancelAll(){ for(const j of jobs) await drop(j.id); jobs=[]; bar(); }
+  window.addEventListener("beforeunload",e=>{ if(running){ e.preventDefault(); e.returnValue=""; } });
+  return {add,run,resume,cancelAll,busy:()=>running||jobs.length>0};
+})();
+
+/* ---------- 수업 자료 (반 전체에 한 번에) ---------- */
+let cmPick=null; // 고른 학생 id 들
+function renderCM(){
+  if(!$("cmClass")) return;
+  const cls=myClasses(); const cur=$("cmClass").value;
+  $("cmClass").innerHTML=`<option value="">반을 골라 주세요</option>`+cls.map(c=>`<option value="${c.id}">${esc(c.name)} (${students.filter(x=>x.active!==false&&x.classId===c.id).length}명)</option>`).join("")+`<option value="__all">내 학생 전체</option>`;
+  let val=cur; if(!val){ try{ val=localStorage.getItem("hc-cmclass")||""; }catch(e){} }
+  if(val&&[...$("cmClass").options].some(o=>o.value===val)) $("cmClass").value=val;
+  if(!$("cmDate").value) $("cmDate").value=day||TODAY;
+  renderCMKids();
+}
+function cmStudents(){ const v=$("cmClass").value; if(!v) return []; return (v==="__all"?scoped():students.filter(s=>s.active!==false&&s.classId===v)); }
+function renderCMKids(){
+  const list=cmStudents();
+  if(!cmPick||cmPick.cls!==$("cmClass").value) cmPick={cls:$("cmClass").value,ids:new Set(list.map(s=>s.id))};
+  $("cmKids").innerHTML = list.length ? list.map(s=>`<button type="button" class="ghost" data-cmk="${s.id}" aria-pressed="${cmPick.ids.has(s.id)}" style="padding:5px 10px;${cmPick.ids.has(s.id)?"background:var(--accent);color:var(--accent-ink);border-color:var(--accent)":"opacity:.55;text-decoration:line-through"}">${esc(s.name)}</button>`).join("")+`<span class="hint" style="align-self:center;font-size:12px">누르면 빼거나 넣어요 · ${cmPick.ids.size}명에게 보여요</span>`
+    : `<span class="hint" style="font-size:13px">${$("cmClass").value?"이 반에 학생이 없어요.":"반을 고르면 학생이 나와요."}</span>`;
+}
+$("cmClass").addEventListener("change",()=>{ try{ localStorage.setItem("hc-cmclass",$("cmClass").value); }catch(e){} cmPick=null; renderCMKids(); });
+$("cmKids").addEventListener("click",e=>{ const b=e.target.closest("[data-cmk]"); if(!b) return; const id=b.dataset.cmk; cmPick.ids.has(id)?cmPick.ids.delete(id):cmPick.ids.add(id); renderCMKids(); });
+$("cmFile").addEventListener("change",async e=>{ const fi=e.target, id="cmFile", list=pendingFiles[id]||[]; let bad=0; $("pf-cmFile").textContent=" 준비 중…";
+  for(const f of [...fi.files]){ try{ const buf=await f.arrayBuffer(); list.push(new File([buf],f.name||"file",{type:f.type||"image/jpeg"})); }catch(err){ bad++; } }
+  pendingFiles[id]=list; fi.value=""; showPF(id); if(bad) toast(`파일 ${bad}개를 읽지 못했어요. 크롬에서 다시 골라 주세요`); });
+$("cmForm").addEventListener("click",e=>{ const pc=e.target.closest("[data-pfclear]"); if(pc){ delete pendingFiles.cmFile; showPF("cmFile"); setFS("cmFile","",""); } });
+$("cmForm").addEventListener("submit",async e=>{ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
+  const files=pendingFiles.cmFile||[]; const sids=cmPick?[...cmPick.ids]:[];
+  if(!$("cmClass").value) return setFS("cmFile","반을 골라 주세요.","bad");
+  if(!sids.length) return setFS("cmFile","자료를 받을 학생을 한 명 이상 골라 주세요.","bad");
+  if(!files.length) return setFS("cmFile","사진이나 PDF를 골라 주세요.","bad");
+  const big=files.find(x=>x.size>10*1024*1024&&(x.type==="application/pdf"||/\.pdf$/i.test(x.name||""))); if(big) return setFS("cmFile",`${big.name} 파일이 10MB보다 커요.`,"bad");
+  const date=$("cmDate").value||TODAY; const md=date.slice(5).replace("-","/").replace(/^0/,"").replace("/0","/");
+  const sel=$("cmClass"); const cname=sel.value==="__all"?"전체":(classes.find(c=>c.id===sel.value)||{}).name||"";
+  const title=$("cmTitle").value.trim()||`${md} 수업 자료`;
+  await UQ.add({sids,date,title,memo:$("cmMemo").value.trim(),files,label:`${cname} ${title}`.trim()});
+  delete pendingFiles.cmFile; showPF("cmFile"); $("cmTitle").value=""; $("cmMemo").value="";
+  setFS("cmFile",`⬆ ${sids.length}명에게 올리기 시작했어요. 아래 막대에서 진행 상황이 보여요 — 다음 반 자료도 바로 올릴 수 있어요.`,"ok");
+});
+
 function renderStudents(){
   // 새로고침 때 입력 중이던 내용이 지워지지 않게 보관했다가 되살리기
   const keep={}; document.querySelectorAll("#slist .tpanel input:not([type=file]), #slist .tpanel select, #slist .tpanel textarea").forEach(el=>{ if(el.id) keep[el.id]=el.value; });
@@ -768,7 +880,7 @@ function testPanel(s){
 
 /* ---------- render / tabs ---------- */
 let view="day";
-function render(){ if(view==="day") renderDay(); else if(view==="week") renderWeek(); else if(view==="rank") renderRank(); else if(view==="notice") renderNotices(); else renderStudents(); }
+function render(){ if(view==="day"){ renderDay(); if(!(document.activeElement&&document.activeElement.closest("#cmForm"))) renderCM(); } else if(view==="week") renderWeek(); else if(view==="rank") renderRank(); else if(view==="notice") renderNotices(); else renderStudents(); }
 function show(v){
   view=v; ["day","week","rank","notice","students"].forEach(k=>{ $("v-"+k).hidden=k!==v; $("tab-"+k).setAttribute("aria-selected",k===v); });
   try{ localStorage.setItem("hw-tab",v); }catch(e){}
@@ -780,8 +892,8 @@ $("rankSeg").addEventListener("click",e=>{ const b=e.target.closest("[data-rp]")
 
 /* ---------- photos ---------- */
 async function shrink(file){
-  const max=1600;
-  const draw=(src,w,h)=>{ const k=Math.min(1,max/Math.max(w,h)); const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k)); c.getContext("2d").drawImage(src,0,0,c.width,c.height); return new Promise(ok=>c.toBlob(b=>ok(b),"image/jpeg",0.8)); };
+  const max=1440; // 글씨는 또렷하고 파일은 가볍게
+  const draw=(src,w,h)=>{ const k=Math.min(1,max/Math.max(w,h)); const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k)); const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(src,0,0,c.width,c.height); return new Promise(ok=>c.toBlob(b=>ok(b),"image/jpeg",0.74)); };
   // 1) 큰 사진도 줄이면서 읽기 (안드로이드 크롬)
   if(window.createImageBitmap){ try{ const bm=await createImageBitmap(file); const b=await draw(bm,bm.width,bm.height); bm.close&&bm.close(); if(b&&b.size) return b; }catch(e){} }
   // 2) 일반 방식
@@ -920,13 +1032,9 @@ $("slist").addEventListener("submit",async e=>{
     if(!g("mt")) return setFS(fid,"자료 이름을 적어 주세요.","bad");
     if(!files.length) return setFS(fid,"올릴 파일을 골라 주세요.","bad");
     const big=files.find(x=>x.size>10*1024*1024); if(big) return setFS(fid,`${big.name} 파일이 10MB보다 커요.`,"bad");
-    const data={sid,date:g("md")||TODAY,title:g("mt"),memo:g("mc"),files:[],createdAt:Date.now()}; if(me) data.by=me;
-    const btn=mf.querySelector("button[type=submit]"); btn.disabled=true; SN.busy.n++;
-    setFS(fid,`올리는 중 0/${files.length}… 화면을 닫지 말아 주세요`,"run");
-    try{ data.files=await uploadAll(files,"m",n=>setFS(fid,`올리는 중 ${n}/${files.length}… 화면을 닫지 말아 주세요`,"run"));
-      await db.collection("materials").add(data); delete pendingFiles[fid]; setFS(fid,"✅ 자료를 올렸어요. 학생 앱에 바로 보여요.","ok"); toast("자료를 올렸어요");
-    }catch(err){ setFS(fid,(err.serverMessage||err.message||"올리지 못했어요")+" · 다시 눌러 주세요.","bad"); }
-    finally{ SN.busy.n--; btn.disabled=false; btn.textContent="자료 올리기"; renderStudents(); }
+    await UQ.add({sids:[sid],date:g("md")||TODAY,title:g("mt"),memo:g("mc"),files,label:(students.find(x=>x.id===sid)||{}).name||""});
+    delete pendingFiles[fid]; showPF(fid); $("mt-"+sid).value=""; $("mc-"+sid).value="";
+    setFS(fid,"⬆ 올리기 시작했어요. 아래 막대에서 진행 상황이 보여요 — 다른 일 하셔도 돼요.","ok");
     return; }
   const f=e.target.closest("[data-tform]"); if(!f) return; e.preventDefault();
   if(!db||!canWrite) return toast("보기 전용이에요");
@@ -1127,7 +1235,7 @@ async function connect(){
   db.collection("materials").onSnapshot(snap=>{ materials=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform"))) renderStudents(); });
   db.collection("tests").onSnapshot(snap=>{ tests=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform"))) renderStudents(); });
   $("sync").textContent="불러오는 중…";
-  await db.refresh(); loaded=true; render();
+  await db.refresh(); loaded=true; render(); renderCM(); UQ.resume();
 }
 $("importFile").addEventListener("change",async e=>{
   const f=e.target.files[0]; if(!f||!isOwner) return;

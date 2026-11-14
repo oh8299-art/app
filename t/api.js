@@ -62,6 +62,14 @@
         doc: id => docRef(col, id),
         where(field, op, val) { const prev = filter; const f = d => { const x = d[field]; const ok = op === ">=" ? x >= val : op === "<=" ? x <= val : op === "==" ? x === val : true; return ok && (!prev || prev(d)); }; return colRef(col, f); },
         async add(data) { const r = await write({ op: "add", col, data }, col); return docRef(col, r.id); },
+        // 여러 개를 한 번에 저장 (예전 서버면 하나씩 저장)
+        async addMany(items) {
+          let r; pending++;
+          try { r = await API.call({ op: "addMany", col, items }); } finally { pending--; }
+          if (r && r.ok) { (r.ids || []).forEach((id, i) => { ensure(col)[id] = (r.datas && r.datas[i]) || items[i]; }); notify(col); return r.ids; }
+          if (r && r.error !== "bad_op") throw fail(r);
+          const ids = []; for (const it of items) { const w = await write({ op: "add", col, data: it }, col); ids.push(w.id); } return ids;
+        },
         onSnapshot(cb) { const l = { col, filter, cb }; listeners.push(l); cb(snapOf(col, filter)); return () => listeners.splice(listeners.indexOf(l), 1); },
         async get() { return snapOf(col, filter); }
       };

@@ -117,6 +117,19 @@ function handle(store, req) {
     return out;
   }
 
+  if (op === "addMany") {
+    var mcol = String(req.col || ""), items = req.items || [];
+    if (!validCol_(mcol)) return { error: "bad_col", message: "알 수 없는 저장 위치예요." };
+    if (OWNER_ONLY[mcol] || mcol === "students") return { error: "forbidden", message: "여기에는 한꺼번에 저장할 수 없어요." };
+    if (!items.length || items.length > 80) return { error: "bad_items", message: "한 번에 80개까지 저장할 수 있어요." };
+    return store.withLock(function () {
+      var ids = [], datas = [], now = Date.now();
+      for (var q = 0; q < items.length; q++) { var d = items[q] && typeof items[q] === "object" ? items[q] : {}; d.updatedAt = now;
+        var nid2 = newId_(); store.put(mcol, nid2, d); ids.push(nid2); datas.push(d); }
+      return { ok: true, ids: ids, datas: datas };
+    });
+  }
+
   if (op === "set" || op === "update" || op === "delete" || op === "add") {
     var col = String(req.col || "");
     if (!validCol_(col)) return { error: "bad_col", message: "알 수 없는 저장 위치예요." };
@@ -203,10 +216,10 @@ function studentPayload_(store, sid) {
   var className = function (id) { return classes[id] ? classes[id].name || "" : ""; };
   var notices = asList_(store.getAll("notices")).filter(function (n) { return n.date && n.date >= kstDay_(-14) && n.date <= kstDay_(7) && n.text && (n.classId === "all" || (s.classId && n.classId === s.classId)); })
     .sort(byDate).slice(0, 10).map(function (n) { return { date: n.date, text: n.text, cls: n.classId === "all" ? "전체" : className(n.classId) }; });
-  var tests = asList_(store.getAll("tests")).filter(function (t) { return t.sid === sid && t.date; }).sort(byDate).slice(0, 60)
+  var tests = asList_(store.getAll("tests")).filter(function (t) { return t.sid === sid && t.date; }).sort(byDate).slice(0, 300)
     .map(function (t) { return { date: t.date, title: t.title || "", score: t.score == null ? "" : t.score, total: Number(t.total) || 0, memo: t.memo || "",
       photos: (t.photos || []).filter(function (x) { return typeof x === "string"; }).map(function (x) { return { id: x, t: "image/jpeg" }; }) }; });
-  var mats = asList_(store.getAll("materials")).filter(function (x) { return x.sid === sid && x.date; }).sort(byDate).slice(0, 60)
+  var mats = asList_(store.getAll("materials")).filter(function (x) { return x.sid === sid && x.date; }).sort(byDate).slice(0, 600)
     .map(function (x) { return { date: x.date, title: x.title || "", memo: x.memo || "",
       files: (x.files || []).filter(function (f) { return f && f.id; }).map(function (f) { return { id: f.id, t: f.type === "application/pdf" ? "application/pdf" : "image/jpeg", n: f.name || "" }; }) }; });
   var homework = records.filter(function (r) { return r.sid === sid && r.date >= from && r.status && r.status !== "skip"; })
