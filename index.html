@@ -3,7 +3,11 @@
 <meta name="apple-mobile-web-app-title" content="수학날개"><link rel="apple-touch-icon" href="icon.png"><link rel="icon" href="icon.png"><link rel="manifest" href="manifest.json">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="config.js"></script></head><body>
+<script src="config.js"></script><meta name="sn-ver" content="2026-11-15a">
+<script>/* 새 버전이 올라오면 자동으로 새로고침 */
+(function(){ var V="2026-11-15a"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
+setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>나의 수학날개</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
