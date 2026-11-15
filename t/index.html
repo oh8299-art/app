@@ -807,11 +807,20 @@ function _renderStudents(){
         <button class="ghost" data-mats="${s.id}" aria-expanded="${openMats===s.id}">자료 ${materials.filter(m=>m.sid===s.id).length}</button>
         ${(()=>{ const u=fees.filter(f=>f.sid===s.id&&!f.paid).length; return `<button class="ghost" data-fees="${s.id}" aria-expanded="${openFees===s.id}" ${u?'style="border-color:var(--s-fix);color:var(--s-fix)"':""}>교재비${u?" 미납 "+u:""}</button>`; })()}
         <span style="flex:1"></span>
+        <button class="ghost" data-edit="${s.id}" aria-expanded="${openEdit===s.id}">✏️ 정보 수정</button>
         ${pendingDel===s.id?`<button class="danger" data-del="yes">정말 삭제</button><button class="ghost" data-del="no">취소</button>`:`<button class="danger" data-del="ask">삭제</button>`}
       </div>
-      ${openTests===s.id?testPanel(s):""}${openMats===s.id?matPanel(s):""}${openFees===s.id?feePanel(s):""}
+      ${openEdit===s.id?editPanel(s):""}${openTests===s.id?testPanel(s):""}${openMats===s.id?matPanel(s):""}${openFees===s.id?feePanel(s):""}
     </div>`) : `<div class="empty">${loaded?"등록된 학생이 없어요. 위에서 추가해 주세요.":"불러오는 중…"}</div>`;
 }
+function editPanel(s){
+  return `<div class="tpanel"><form class="tform" data-eform="${s.id}" novalidate>
+    <label class="w2" style="font-size:12px;color:var(--muted)">이름<input id="en-${s.id}" value="${esc(s.name||"")}" autocomplete="off" style="width:100%"></label>
+    <label class="w2" style="font-size:12px;color:var(--muted)">학년<input id="eg-${s.id}" value="${esc(s.grade||"")}" placeholder="예: 4학년" autocomplete="off" style="width:100%"></label>
+    <label class="w4" style="font-size:12px;color:var(--muted)">학생 코드 (숫자 4자리 · 바꾸면 학생에게 새 코드를 알려 주세요)<input id="ec-${s.id}" value="${esc(s.code||"")}" inputmode="numeric" maxlength="4" autocomplete="off" style="width:100%"></label>
+    <button class="act w2" type="submit">저장</button><button class="ghost w2" type="button" data-edit="${s.id}">닫기</button>
+    <p class="fmsg w4" id="fs-e-${s.id}"></p></form></div>`; }
+let openEdit=null;
 let pendingDel=null, openTests=null, tests=[], openMats=null, materials=[], openFees=null, fees=[];
 const won=n=>(Number(n)||0).toLocaleString("ko-KR")+"원";
 const thisMonthFee=()=>`${parse(TODAY).getMonth()+1}월 교재비`;
@@ -1018,6 +1027,18 @@ async function onFeeDel(e){ const d=e.target.closest("[data-fdel]"); if(!d) retu
 $("feeUnpaid").addEventListener("change",onFeeChange);
 $("feeUnpaid").addEventListener("click",e=>{ onFeeDel(e); });
 $("slist").addEventListener("submit",async e=>{
+  const ef=e.target.closest("[data-eform]");
+  if(ef){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
+    const sid=ef.dataset.eform, st=students.find(x=>x.id===sid), fid="e-"+sid;
+    const name=$("en-"+sid).value.trim(), grade=$("eg-"+sid).value.trim(), code=$("ec-"+sid).value.replace(/\D/g,"");
+    if(!name) return setFS(fid,"이름을 넣어 주세요.","bad");
+    if(code.length!==4) return setFS(fid,"코드는 숫자 4자리로 넣어 주세요.","bad");
+    if(students.some(x=>x.id!==sid&&x.code===code)) return setFS(fid,"다른 학생이 쓰고 있는 코드예요. 다른 숫자로 바꿔 주세요.","bad");
+    if(teachers.some(t=>t.code===code)) return setFS(fid,"선생님 코드와 같아요. 다른 숫자로 바꿔 주세요.","bad");
+    const ch={name,grade,code}; setFS(fid,"저장하는 중…","run");
+    try{ await db.collection("students").doc(sid).update(ch); openEdit=null; toast(`${name} 정보를 고쳤어요${st&&st.code!==code?" · 새 코드 "+code+"를 알려 주세요":""}`); renderStudents(); }
+    catch(err){ setFS(fid,(err.serverMessage||err.message||"저장하지 못했어요"),"bad"); }
+    return; }
   const ff=e.target.closest("[data-fform]");
   if(ff){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
     const sid=ff.dataset.fform, title=$("fft-"+sid).value.trim(), amount=parseWon($("ffa-"+sid).value), memo=$("ffm-"+sid).value.trim();
@@ -1082,6 +1103,8 @@ $("slist").addEventListener("click",async e=>{
   const cb=e.target.closest("[data-code]");
   if(cb){ if(cb.dataset.code==="copy"){ copyText(`[수학날개] ${s.name} 학생 숙제앱 코드\n코드: ${s.code}\n앱 열기: ${STUDENT_APP}\n코드를 넣으면 내 숙제·테스트 결과와 숙제왕 순위를 볼 수 있어요.`); }
     else { if(!db||!canWrite) return toast("보기 전용이에요"); try{ await db.collection("students").doc(sid).update({code:newCode()}); toast("코드를 만들었어요"); }catch(err){ handleWriteErr(err); } } return; }
+  const eb=e.target.closest("[data-edit]");
+  if(eb){ openEdit = openEdit===sid?null:sid; renderStudents(); if(openEdit) setTimeout(()=>{ const i=$("en-"+sid); if(i) i.focus(); },50); return; }
   const fb=e.target.closest("[data-fees]");
   if(fb){ openFees = openFees===sid?null:sid; renderStudents(); return; }
   const mb=e.target.closest("[data-mats]");
