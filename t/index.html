@@ -136,7 +136,18 @@ body:has(#upq:not([hidden])){padding-bottom:90px}
 .titem{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;font-size:14px;font-variant-numeric:tabular-nums}
 .titem small{color:var(--muted)}
 .tabs button{font-size:13px;padding:9px 2px}
-.ghdr{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding:6px 2px 0}
+.ghdr{font-size:14px;font-weight:800;color:var(--ink);padding:14px 4px 2px;display:flex;align-items:center;gap:8px;scroll-margin-top:120px}
+.ghdr::before{content:"";width:4px;height:16px;border-radius:2px;background:var(--accent)}
+.ghdr small{font-weight:600;color:var(--muted);font-size:12px}
+.findbar{position:sticky;top:0;z-index:15;background:var(--bg);padding:8px 0;display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.findbar .fq{position:relative}
+.findbar input{width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:11px 40px 11px 14px;font:16px var(--f-body)}
+.findbar .fx{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--muted);font-size:18px;padding:6px 10px;cursor:pointer}
+.fcls{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.fcls button{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:600 13px var(--f-body);cursor:pointer}
+.fcls button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.fcls button small{opacity:.7;font-weight:500;margin-left:3px}
+mark.hl{background:#ffe58a;color:inherit;border-radius:3px;padding:0 1px}
 .seg{display:inline-grid;grid-template-columns:1fr 1fr;background:var(--sunk);border-radius:9px;padding:3px;gap:3px}
 .seg button{border:0;background:transparent;color:var(--muted);font:600 13px var(--f-body);padding:6px 14px;border-radius:7px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink)}
@@ -237,6 +248,10 @@ body:has(#upq:not([hidden])){padding-bottom:90px}
     </div>
     <div class="scope" id="scope" aria-label="보는 범위"></div>
   </header>
+  <div class="findbar" id="findbar" hidden>
+    <div class="fq"><input type="text" enterkeyhint="search" id="fq" placeholder="🔍 학생 이름 찾기 (초성도 돼요: ㄱㅁㄱ)" autocomplete="off" aria-label="학생 이름 찾기"><button type="button" class="fx" id="fqx" aria-label="지우기" hidden>✕</button></div>
+    <div class="fcls" id="fcls" aria-label="반 고르기"></div>
+  </div>
   <div class="notice" id="ro" hidden>저장하지 못했어요. 인터넷 연결을 확인해 주세요.</div>
 
   <section id="v-login">
@@ -436,7 +451,37 @@ function sortByClass(list){ const ord={}; classes.forEach((c,i)=>ord[c.id]=i); r
 function scoped(){ return sortByClass(students.filter(inScope)); }
 function className(id){ const c=classes.find(c=>c.id===id); return c?c.name:""; }
 function myClasses(){ return classes.filter(c=> isOwner || !c.teacherId || normT(c.teacherId)===me || students.some(s=>s.classId===c.id&&tKey(s)===me)); }
-function withHeaders(list,fn){ let last=null, out=""; list.forEach(s=>{ const k=s.classId&&className(s.classId)?s.classId:"_"; if(k!==last&&classes.length){ out+=`<div class="ghdr">${esc(k==="_"?"반 미정":className(k))}</div>`; last=k; } out+=fn(s); }); return out; }
+function withHeaders(list,fn){ const key=s=>s.classId&&className(s.classId)?s.classId:"_"; const cnt={}; list.forEach(s=>cnt[key(s)]=(cnt[key(s)]||0)+1);
+  let last=null, out=""; list.forEach(s=>{ const k=key(s); if(k!==last&&classes.length){ out+=`<div class="ghdr">${esc(k==="_"?"반 미정":className(k))}<small>${cnt[k]}명</small></div>`; last=k; } out+=fn(s); }); return out; }
+/* ---------- 학생 찾기 (이름·초성 검색 + 반 고르기) ---------- */
+let findQ="", findCls=(()=>{ try{ return localStorage.getItem("hc-fcls")||"all"; }catch(e){ return "all"; } })();
+const CHO="ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+const choOf=t=>[...String(t)].map(ch=>{ const c=ch.charCodeAt(0)-0xAC00; return c>=0&&c<11172?CHO[Math.floor(c/588)]:ch; }).join("");
+function nameHit(name){ const q=findQ.replace(/\s/g,""); if(!q) return true; const n=String(name||"").replace(/\s/g,"");
+  return n.includes(q) || (/^[ㄱ-ㅎ]+$/.test(q) && choOf(n).includes(q)); }
+function findFilter(list){ return list.filter(s=> nameHit(s.name) && (findCls==="all" || (findCls==="_"?!(s.classId&&className(s.classId)):s.classId===findCls))); }
+function hlName(name){ const q=findQ.trim(); const n=esc(name||""); if(!q||/^[ㄱ-ㅎ]+$/.test(q)) return n; const i=String(name).indexOf(q); return i<0?n:esc(name.slice(0,i))+`<mark class="hl">${esc(q)}</mark>`+esc(name.slice(i+q.length)); }
+function renderFindbar(){
+  const fb=$("findbar"); if(!fb) return;
+  fb.hidden=!["day","week","students"].includes(view);
+  const base=students.filter(inScope);
+  const cls=classes.filter(c=>base.some(s=>s.classId===c.id));
+  const none=base.filter(s=>!(s.classId&&className(s.classId))).length;
+  if(findCls!=="all"&&findCls!=="_"&&!cls.some(c=>c.id===findCls)) findCls="all";
+  if(findCls==="_"&&!none) findCls="all";
+  $("fcls").innerHTML=`<button type="button" data-fc="all" aria-pressed="${findCls==="all"}">전체 반<small>${base.length}</small></button>`
+    +cls.map(c=>`<button type="button" data-fc="${c.id}" aria-pressed="${findCls===c.id}">${esc(c.name)}<small>${base.filter(s=>s.classId===c.id).length}</small></button>`).join("")
+    +(none?`<button type="button" data-fc="_" aria-pressed="${findCls==="_"}">반 미정<small>${none}</small></button>`:"");
+  $("fqx").hidden=!findQ;
+}
+function findEmpty(){ return findQ?`'${esc(findQ)}' 이름을 가진 학생이 없어요.`:"이 반에 학생이 없어요."; }
+function findActive(){ return !!findQ||findCls!=="all"; }
+$("fq").addEventListener("input",()=>{ const was=findQ; findQ=$("fq").value.trim(); render();
+  if(view==="students"&&findQ&&!was){ const l=$("slist"), fb=$("findbar"); if(l) window.scrollTo({top:l.getBoundingClientRect().top+scrollY-(fb?fb.offsetHeight:0)-60,behavior:"smooth"}); } });
+$("fq").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("fq").blur(); } });
+$("fqx").addEventListener("click",()=>{ $("fq").value=""; findQ=""; render(); $("fq").focus(); });
+$("fcls").addEventListener("click",e=>{ const b=e.target.closest("[data-fc]"); if(!b) return; findCls=b.dataset.fc; try{ localStorage.setItem("hc-fcls",findCls); }catch(_){} render();
+  if(view==="students"){ const l=$("slist"); if(l) l.scrollIntoView({behavior:"smooth",block:"start"}); } });
 function savedTCode(){ try{ return localStorage.getItem("hc-tcode")||""; }catch(e){ return ""; } }
 function applyIdentity(){
   if(!me) return;
@@ -521,7 +566,7 @@ function handleWriteErr(e){
 }
 
 /* ---------- day view ---------- */
-function dayList(){ return scoped().filter(s=>dueOn(s,day) || recs[rid(day,s.id)]); }
+function dayList(){ return findFilter(scoped()).filter(s=>dueOn(s,day) || recs[rid(day,s.id)]); }
 function teacherSummary(){
   const el=$("tsum");
   if(!(isOwner && scope==="all")){ el.hidden=true; return; }
@@ -559,7 +604,7 @@ function renderDay(){
 
   const shown=list.filter(s=>filter==="all"||statusOf(day,s.id)===filter);
   if(!students.length){ $("list").innerHTML=`<div class="empty">${loaded?"아직 학생이 없어요.<br>‘학생 관리’ 탭에서 이름과 숙제 요일을 추가하면 여기에 날마다 체크 목록이 생겨요.":"학생 명단을 불러오는 중이에요…"}</div>`; return; }
-  if(!shown.length){ $("list").innerHTML=`<div class="empty">${list.length?"이 상태인 학생이 없어요.":"이 날은 숙제 요일인 학생이 없어요."}</div>`; return; }
+  if(!shown.length){ $("list").innerHTML=`<div class="empty">${list.length?"이 상태인 학생이 없어요.":findActive()?findEmpty()+(findQ?"<br>오늘 숙제 요일이 아니면 '주간'이나 '반·학생' 탭에서 찾아 보세요.":""):"이 날은 숙제 요일인 학생이 없어요."}</div>`; return; }
   $("list").innerHTML=withHeaders(shown,card);
 }
 
@@ -644,8 +689,8 @@ function renderWeek(){
   const a=parse(days[0]), b=parse(days[5]);
   $("weekLabel").textContent=`${a.getMonth()+1}/${a.getDate()} – ${b.getMonth()+1}/${b.getDate()}`;
   $("legend").innerHTML=["sub","fix","fixed","done"].map(k=>`<span><i style="background:${cssv(ST[k].color)}"></i>${ST[k].label}</span>`).join("")+`<span><i style="border:2px dashed var(--s-none)"></i>미제출</span>`;
-  const act=scoped();
-  if(!act.length){ $("grid").innerHTML=`<tr><td style="padding:24px;color:var(--muted)">학생을 추가하면 주간 현황이 보여요.</td></tr>`; return; }
+  const act=findFilter(scoped());
+  if(!act.length){ $("grid").innerHTML=`<tr><td style="padding:24px;color:var(--muted)">${findActive()?findEmpty():"학생을 추가하면 주간 현황이 보여요."}</td></tr>`; return; }
   let h=`<tr><th class="nm">이름</th>`+days.map(d=>{const x=parse(d);return `<th class="${d===TODAY?"today":""}">${DOW[x.getDay()]}<br>${x.getDate()}</th>`}).join("")+`<th>완료율</th></tr>`;
   h+=act.map(s=>{
     let due=0,done=0;
@@ -793,7 +838,7 @@ function renderStudents(){
 function _renderStudents(){
   renderFees();
   $("newDays").innerHTML=daysHtml(newDays,"data-nd");
-  const act=scoped();
+  const act=findFilter(scoped());
   const opts=teacherIds();
   $("teacherForm").hidden=!isOwner;
   if(isOwner) $("tlist").innerHTML = teachers.length ? teachers.map(t=>`<div class="srow" data-tid="${t.id}"><div class="who"><div class="name">${esc(t.name)} 선생님</div><div class="grade">담당 학생 ${students.filter(s=>s.active!==false&&tKey(s)===t.id).length}명</div></div><span class="code">${esc(t.code)}</span><button type="button" class="ghost" data-tcopy>코드 보내기 복사</button>${pendingTDel===t.id?`<button type="button" class="danger" data-tdelc="yes">정말 삭제</button><button type="button" class="ghost" data-tdelc="no">취소</button>`:`<button type="button" class="danger" data-tdelc="ask">삭제</button>`}</div>`).join("") : `<p class="hint">선생님을 추가하면 4자리 코드가 만들어져요. 그 코드로 선생님이 숙제체크 앱에 들어와요.</p>`;
@@ -801,7 +846,7 @@ function _renderStudents(){
   $("newClassSel").innerHTML=`<option value="">반 선택 안 함</option>`+cls.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("");
   $("clist").innerHTML=cls.map(c=>`<span>${esc(c.name)} · ${students.filter(s=>s.active!==false&&s.classId===c.id).length}명${pendingClassDel===c.id?`<button type="button" data-cdel="yes" style="color:#d0453b">정말 삭제</button><button type="button" data-cdel="no">취소</button>`:`<button type="button" data-cdel="ask" data-cid="${c.id}" aria-label="${esc(c.name)} 삭제">×</button>`}</span>`).join("");
   $("slist").innerHTML= act.length? withHeaders(act,s=>`<div class="srow" data-sid="${s.id}">
-      <div class="who"><div class="name">${esc(s.name)}</div><div class="grade">${esc(s.grade||"")}</div></div>
+      <div class="who"><div class="name">${hlName(s.name)}</div><div class="grade">${esc(s.grade||"")}</div></div>
       <select class="tsel" data-csel aria-label="반"><option value="">반 미정</option>${cls.map(c=>`<option value="${c.id}" ${s.classId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>
       ${isOwner?`<select class="tsel" data-tsel aria-label="담당 선생님">${opts.map(id=>`<option value="${id}" ${tKey(s)===id?"selected":""}>${esc(tName(id))}</option>`).join("")}</select>`:`<span class="owner-tag">${esc(tName(tKey(s)))}</span>`}
       <div class="days">${daysHtml(s.days||[1,2,3,4,5],"data-sd")}</div>
@@ -815,7 +860,7 @@ function _renderStudents(){
         ${pendingDel===s.id?`<button class="danger" data-del="yes">정말 삭제</button><button class="ghost" data-del="no">취소</button>`:`<button class="danger" data-del="ask">삭제</button>`}
       </div>
       ${openEdit===s.id?editPanel(s):""}${openTests===s.id?testPanel(s):""}${openMats===s.id?matPanel(s):""}${openFees===s.id?feePanel(s):""}
-    </div>`) : `<div class="empty">${loaded?"등록된 학생이 없어요. 위에서 추가해 주세요.":"불러오는 중…"}</div>`;
+    </div>`) : `<div class="empty">${!loaded?"불러오는 중…":findActive()&&students.some(inScope)?findEmpty():"등록된 학생이 없어요. 위에서 추가해 주세요."}</div>`;
 }
 function editPanel(s){
   return `<div class="tpanel"><form class="tform" data-eform="${s.id}" novalidate>
@@ -893,7 +938,7 @@ function testPanel(s){
 
 /* ---------- render / tabs ---------- */
 let view="day";
-function render(){ if(view==="day"){ renderDay(); if(!(document.activeElement&&document.activeElement.closest("#cmForm"))) renderCM(); } else if(view==="week") renderWeek(); else if(view==="rank") renderRank(); else if(view==="notice") renderNotices(); else renderStudents(); }
+function render(){ renderFindbar(); if(view==="day"){ renderDay(); if(!(document.activeElement&&document.activeElement.closest("#cmForm"))) renderCM(); } else if(view==="week") renderWeek(); else if(view==="rank") renderRank(); else if(view==="notice") renderNotices(); else renderStudents(); }
 function show(v){
   view=v; ["day","week","rank","notice","students"].forEach(k=>{ $("v-"+k).hidden=k!==v; $("tab-"+k).setAttribute("aria-selected",k===v); });
   try{ localStorage.setItem("hw-tab",v); }catch(e){}
