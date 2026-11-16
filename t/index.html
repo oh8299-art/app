@@ -3,9 +3,9 @@
 <meta name="apple-mobile-web-app-title" content="숙제체크"><link rel="apple-touch-icon" href="../icon.png"><link rel="icon" href="../icon.png">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-16a">
+<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-16b">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
-(function(){ var V="2026-11-16a"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+(function(){ var V="2026-11-16b"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
 setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>수학날개 숙제체크</title>
@@ -139,6 +139,19 @@ body:has(#upq:not([hidden])){padding-bottom:90px}
 .ghdr{font-size:14px;font-weight:800;color:var(--ink);padding:14px 4px 2px;display:flex;align-items:center;gap:8px;scroll-margin-top:120px}
 .ghdr::before{content:"";width:4px;height:16px;border-radius:2px;background:var(--accent)}
 .ghdr small{font-weight:600;color:var(--muted);font-size:12px}
+.books{display:flex;flex-direction:column;gap:6px}
+.books .bg{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.books .bg>span{font-size:12px;font-weight:700;color:var(--muted);min-width:64px}
+.books button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 14px;font:600 14px var(--f-body);cursor:pointer}
+.books button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.nlab{font-size:13px;font-weight:700;margin-top:4px}.nlab small{font-weight:400;color:var(--muted)}
+.attrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.attrow .an{flex:1;font-weight:600;font-size:14px;min-width:0}
+.stars{display:inline-flex;gap:2px}
+.stars button{border:0;background:transparent;font-size:24px;line-height:1;padding:4px 3px;cursor:pointer;color:#d6d9e0}
+.stars button.on{color:#f5b301}
+.stars.sm button{font-size:20px;padding:2px}
+.attcard{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:6px}
 .findbar{position:sticky;top:0;z-index:15;background:var(--bg);padding:8px 0;display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
 .findbar .fq{position:relative}
 .findbar input{width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:11px 40px 11px 14px;font:16px var(--f-body)}
@@ -338,9 +351,14 @@ mark.hl{background:#ffe58a;color:inherit;border-radius:3px;padding:0 1px}
   <section id="v-notice" hidden>
     <div style="display:flex;flex-direction:column;gap:12px">
       <form class="form" id="noticeForm">
-        <h3>반별 숙제 공지</h3>
+        <h3>반별 숙제 공지 · 수업 일지</h3>
         <div class="frow"><select id="nClass" aria-label="반"></select><input id="nDate" type="date" aria-label="날짜"></div>
-        <textarea id="nText" placeholder="예: 대치동셈수학 3권 12~15쪽, 오답은 노트에 다시 풀기" aria-label="숙제 내용" required></textarea>
+        <div class="books" id="nBooks"></div>
+        <label class="nlab" for="nText">📝 숙제 <small>교재를 누르면 아래에 써져요. 쪽수만 이어서 쓰세요</small></label>
+        <textarea id="nText" placeholder="예: 왕수학 32~35쪽, 오답은 노트에 다시 풀기" aria-label="숙제 내용"></textarea>
+        <label class="nlab" for="nLesson">📘 오늘 학습 내용 <small>(선택)</small></label>
+        <textarea id="nLesson" placeholder="예: 분수의 덧셈 – 받아올림 있는 대분수, 팡세 도형 돌리기" aria-label="학습 내용" style="min-height:64px"></textarea>
+        <div id="nAttBox"></div>
         <button class="act" type="submit">공지 올리기</button>
         <p class="hint">올린 공지는 그 반 학생들의 '나의 수학날개' 앱 맨 위에 바로 보여요.</p>
       </form>
@@ -548,7 +566,7 @@ async function setStatus(sid,date,status){
   if(!db||!canWrite){ toast("보기 전용이라 저장할 수 없어요"); return; }
   const key=rid(date,sid); const prev=recs[key]||{};
   const stamps=Object.assign({},prev.stamps||{}); stamps[status]=Date.now();
-  const data={date,sid,status,memo:prev.memo||"",stamps,updatedAt:Date.now()}; if(prev.subs) data.subs=prev.subs;
+  const data=Object.assign({},prev,{date,sid,status,memo:prev.memo||"",stamps,updatedAt:Date.now()});
   recs[key]=data; render();
   try{ await db.collection("records").doc(key).set(data); }
   catch(e){ handleWriteErr(e); }
@@ -627,6 +645,7 @@ function card(s){
       <span class="pill" style="color:${cssv(S.color)};background:${cssv(S.bg)}">${S.label}</span></div>
     ${st==="skip"?"":`<div class="steps">${stepHtml}</div>`}
     ${(r.subs||[]).length?`<div class="subsbox">${r.subs.map(x=>`<div class="sub1"><span class="sk ${x.kind==="fix"?"fx":""}">${x.kind==="fix"?"오답 정리":"숙제"} · ${fmtTime(x.at)}</span>${x.note?`<span class="sn">💬 ${esc(x.note)}</span>`:""}<div class="thumbs">${(x.files||[]).map(id=>`<a href="#" data-fopen="${esc(id)}"><img data-fid="${esc(id)}" alt="${esc(s.name)} 숙제 사진"></a>`).join("")}</div></div>`).join("")}</div>`:""}
+    <div class="attcard">수업 태도 ${starsHtml(s.id,day,Number(r.att)||0,true)}</div>
     ${showMemo?`<div class="memo"><label for="m-${s.id}">피드백</label><input id="m-${s.id}" data-memo="${s.id}" value="${esc(r.memo||"")}" placeholder="학생 앱에 보여요. 예: 3번 다시, 8번 정답 38개"></div>`:""}
     <div class="acts">${acts}${undo}</div>
     ${stamp?`<div class="stamp">${stamp}</div>`:""}
@@ -965,15 +984,48 @@ async function shrink(file){
 }
 
 /* ---------- notices ---------- */
+/* ---------- 교재 버튼 · 수업 태도 별점 ---------- */
+const BOOKS=[["교과",["왕수학","최상위S","기적의 문제해결법"]],["교구·사고력",["브레인멘사","풀업","팡세","RAT","매쓰몽플러스"]]];
+function renderBooks(){ const t=$("nText").value;
+  $("nBooks").innerHTML=BOOKS.map(([g,bs])=>`<div class="bg"><span>${g}</span>${bs.map(b=>`<button type="button" data-book="${esc(b)}" class="${t.split("\n").some(l=>l.startsWith(b+" ")||l===b)?"on":""}">${esc(b)}</button>`).join("")}</div>`).join(""); }
+$("nBooks").addEventListener("click",e=>{ const b=e.target.closest("[data-book]"); if(!b) return; const ta=$("nText"), name=b.dataset.book;
+  const lines=ta.value.split("\n"); const i=lines.findIndex(l=>l.startsWith(name+" ")||l===name);
+  if(i>=0&&lines[i].trim()===name){ lines.splice(i,1); ta.value=lines.filter((l,k)=>l||k<lines.length-1).join("\n"); renderBooks(); return; } // 쪽수 안 쓴 줄은 다시 누르면 빠져요
+  if(i<0){ ta.value=(ta.value.replace(/\s+$/,"")?ta.value.replace(/\s+$/,"")+"\n":"")+name+" "; }
+  ta.focus(); const pos=i<0?ta.value.length:ta.value.split("\n").slice(0,i+1).join("\n").length; try{ ta.setSelectionRange(pos,pos); }catch(_){}
+  renderBooks(); });
+$("nText").addEventListener("input",renderBooks);
+function starsHtml(sid,date,v,sm){ return `<span class="stars ${sm?"sm":""}" role="radiogroup" aria-label="수업 태도">${[1,2,3,4,5].map(n=>`<button type="button" class="${n<=v?"on":""}" data-att="${n}" data-asid="${sid}" data-adate="${date}" aria-label="별 ${n}개" aria-pressed="${n===v}">★</button>`).join("")}</span>`; }
+async function setAtt(sid,date,n){
+  if(!db||!canWrite) return toast("보기 전용이에요");
+  const key=rid(date,sid); const prev=recs[key]||{date,sid,status:"none",memo:"",stamps:{}};
+  const att=(Number(prev.att)||0)===n?0:n; // 같은 별을 다시 누르면 지워져요
+  const data=Object.assign({},prev,{att,updatedAt:Date.now()}); recs[key]=data; render();
+  try{ await db.collection("records").doc(key).set(data); }catch(e){ handleWriteErr(e); }
+}
+document.addEventListener("click",e=>{ const b=e.target.closest("[data-att]"); if(!b) return; e.preventDefault(); setAtt(b.dataset.asid,b.dataset.adate,+b.dataset.att); });
+function renderAttBox(){
+  const cid=$("nClass").value, date=$("nDate").value||TODAY;
+  if(!cid||cid==="all"){ $("nAttBox").innerHTML=""; return; }
+  const kids=sortByClass(students.filter(s=>s.active!==false&&s.classId===cid));
+  const d=parse(date);
+  $("nAttBox").innerHTML=kids.length?`<div class="nlab" style="margin:6px 0 2px">⭐ 수업 태도 <small>${d.getMonth()+1}/${d.getDate()} · 별을 누르면 바로 저장돼요 (같은 별 다시 누르면 지워져요)</small></div>`
+    +kids.map(s=>`<div class="attrow"><span class="an">${esc(s.name)}</span>${starsHtml(s.id,date,Number((recs[rid(date,s.id)]||{}).att)||0)}</div>`).join(""):"";
+}
+$("nClass").addEventListener("change",()=>{ try{ localStorage.setItem("hc-nclass",$("nClass").value); }catch(_){} renderAttBox(); });
+$("nDate").addEventListener("change",renderAttBox);
+
 function renderNotices(){
   const cls=myClasses();
   const cur=$("nClass").value;
   $("nClass").innerHTML=cls.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")+`<option value="all">전체 학생</option>`;
-  if(cur && [...$("nClass").options].some(o=>o.value===cur)) $("nClass").value=cur;
+  let want=cur; if(!want){ try{ want=localStorage.getItem("hc-nclass")||""; }catch(_){} }
+  if(want && [...$("nClass").options].some(o=>o.value===want)) $("nClass").value=want;
   if(!$("nDate").value) $("nDate").value=TODAY;
+  renderBooks(); renderAttBox();
   const ids=new Set(cls.map(c=>c.id).concat(["all"]));
   const list=notices.filter(n=>isOwner||ids.has(n.classId)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0)).slice(0,40);
-  $("nlist").innerHTML = list.length ? list.map(n=>{ const d=parse(n.date); return `<div class="nitem"><div class="nh"><span class="cls">${esc(n.classId==="all"?"전체 학생":(className(n.classId)||"삭제된 반"))}</span><b>${d.getMonth()+1}/${d.getDate()}(${DOW[d.getDay()]})</b><span style="flex:1"></span>${pendingNoticeDel===n.id?`<button class="danger" data-ndel="yes" data-nid="${n.id}">정말 삭제</button><button class="ghost" data-ndel="no">취소</button>`:`<button class="danger" data-ndel="ask" data-nid="${n.id}">삭제</button>`}</div><div class="txt">${esc(n.text)}</div></div>`; }).join("")
+  $("nlist").innerHTML = list.length ? list.map(n=>{ const d=parse(n.date); return `<div class="nitem"><div class="nh"><span class="cls">${esc(n.classId==="all"?"전체 학생":(className(n.classId)||"삭제된 반"))}</span><b>${d.getMonth()+1}/${d.getDate()}(${DOW[d.getDay()]})</b><span style="flex:1"></span>${pendingNoticeDel===n.id?`<button class="danger" data-ndel="yes" data-nid="${n.id}">정말 삭제</button><button class="ghost" data-ndel="no">취소</button>`:`<button class="danger" data-ndel="ask" data-nid="${n.id}">삭제</button>`}</div>${n.text?`<div class="txt">📝 ${esc(n.text)}</div>`:""}${n.lesson?`<div class="txt" style="color:var(--muted)">📘 ${esc(n.lesson)}</div>`:""}</div>`; }).join("")
     : `<div class="empty">${cls.length?"아직 올린 숙제 공지가 없어요.":"먼저 '반·학생' 탭에서 반을 만들고 학생을 넣어 주세요. 반이 없어도 '전체 학생'으로 공지할 수 있어요."}</div>`;
 }
 let pendingNoticeDel=null, pendingClassDel=null, pendingTDel=null;
@@ -990,9 +1042,9 @@ $("tlist").addEventListener("click",async e=>{ const row=e.target.closest("[data
   pendingTDel=null; try{ await db.collection("teachers").doc(t.id).delete(); toast(t.name+" 선생님을 지웠어요. 담당 학생은 그대로 남아 있어요"); }catch(err){ handleWriteErr(err); } });
 $("noticeForm").addEventListener("submit",async e=>{
   e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
-  const text=$("nText").value.trim(); if(!text) return;
-  const data={classId:$("nClass").value||"all",date:$("nDate").value||TODAY,text,createdAt:Date.now()}; if(me) data.by=me;
-  try{ await db.collection("notices").add(data); $("nText").value=""; toast("공지를 올렸어요"); }catch(err){ handleWriteErr(err); }
+  const text=$("nText").value.trim(), lesson=$("nLesson").value.trim(); if(!text&&!lesson) return toast("숙제나 학습 내용을 써 주세요");
+  const data={classId:$("nClass").value||"all",date:$("nDate").value||TODAY,text,lesson,createdAt:Date.now()}; if(me) data.by=me;
+  try{ await db.collection("notices").add(data); $("nText").value=""; $("nLesson").value=""; renderBooks(); toast("공지를 올렸어요 · 학생 앱에 바로 보여요"); }catch(err){ handleWriteErr(err); }
 });
 $("nlist").addEventListener("click",async e=>{
   const b=e.target.closest("[data-ndel]"); if(!b) return;

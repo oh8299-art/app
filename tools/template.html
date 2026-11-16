@@ -3,9 +3,9 @@
 <meta name="apple-mobile-web-app-title" content="수학날개"><link rel="apple-touch-icon" href="icon.png"><link rel="icon" href="icon.png"><link rel="manifest" href="manifest.json">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="config.js"></script><meta name="sn-ver" content="2026-11-16a">
+<script src="config.js"></script><meta name="sn-ver" content="2026-11-16b">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
-(function(){ var V="2026-11-16a"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+(function(){ var V="2026-11-16b"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
 setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>나의 수학날개</title>
@@ -98,6 +98,10 @@ section{display:flex;flex-direction:column;gap:10px}
 .notice .nd{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:6px;align-items:center}
 .notice .nd .today{background:var(--sun);color:#3a2a00;border-radius:999px;padding:1px 8px}
 .notice .nt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px}
+.notice .nl{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;color:var(--muted);border-top:1px dashed var(--line);padding-top:6px;margin-top:2px}
+.notice .nl b{color:var(--ink);font-weight:700;margin-right:4px}
+.att{color:#f5b301;font-size:15px;letter-spacing:1px;margin-left:6px;white-space:nowrap}.att i{color:#d6d9e0;font-style:normal}
+.att small{color:var(--muted);font-size:11px;letter-spacing:0;margin-right:3px}
 .nlist{display:flex;flex-direction:column;gap:8px}
 .dgrp{padding:10px 14px 2px;font-size:12px;font-weight:700;color:var(--muted);border-top:1px solid var(--line);background:var(--sunk)}
 .card .dgrp:first-child{border-top:0}
@@ -306,7 +310,7 @@ function renderMain(p){
       ${!f.paid&&f.memo?`<div class="fm">${esc(f.memo)}</div>`:""}</div>`; }).join("");
   const nts=(p.notices||[]);
   const tdy=D.updated?D.updated.slice(0,10):"";
-  $("notices").innerHTML = nts.length ? nts.map((n,i)=>{const d=fmtD(n.date); return `<div class="notice ${i>0&&n.date<tdy?"old":""}"><div class="nd">${d.md}(${d.dow}) ${n.date>=tdy?`<span class="today">새 숙제</span>`:""}${n.cls?" · "+esc(n.cls):""}</div><div class="nt">${esc(n.text)}</div></div>`}).join("")
+  $("notices").innerHTML = nts.length ? nts.map((n,i)=>{const d=fmtD(n.date); return `<div class="notice ${i>0&&n.date<tdy?"old":""}"><div class="nd">${d.md}(${d.dow}) ${n.date>=tdy?`<span class="today">새 숙제</span>`:""}${n.cls?" · "+esc(n.cls):""}</div>${n.text?`<div class="nt">${esc(n.text)}</div>`:""}${n.lesson?`<div class="nl"><b>📘 오늘 배운 내용</b> ${esc(n.lesson)}</div>`:""}</div>`}).join("")
     : `<div class="card"><div class="empty">아직 받은 숙제 안내가 없어요.</div></div>`;
   const tests=(p.tests||[]);
   let lastD=null;
@@ -354,7 +358,7 @@ function renderMain(p){
     b.disabled=false; };
   const hw=(p.homework||[]); HW=hw; setupUpload();
   $("hw").innerHTML = hw.length ? hw.map((r,hi)=>{const d=fmtD(r.date); const s=ST[r.status]||ST.none; const nf=(r.subs||[]).reduce((a,x)=>a+(x.files||[]).length,0);
-      return `<div class="hw"><div class="dt">${d.md}<small>${d.dow}요일</small></div><div><span class="pill" style="color:var(${s[1]});background:var(${s[2]})">${s[0]}</span>${r.memo?`<div class="fb">${esc(r.memo)}</div>`:""}${nf?`<div class="subs"><button data-hi="${hi}">📷 보낸 사진 ${nf}장 보기 ▾</button><div class="photos" hidden></div></div>`:""}</div></div>`}).join("")
+      return `<div class="hw"><div class="dt">${d.md}<small>${d.dow}요일</small></div><div><span class="pill" style="color:var(${s[1]});background:var(${s[2]})">${s[0]}</span>${r.att?`<span class="att" aria-label="수업 태도 별 ${r.att}개"><small>수업 태도</small>${"★".repeat(r.att)}<i>${"★".repeat(5-r.att)}</i></span>`:""}${r.memo?`<div class="fb">${esc(r.memo)}</div>`:""}${nf?`<div class="subs"><button data-hi="${hi}">📷 보낸 사진 ${nf}장 보기 ▾</button><div class="photos" hidden></div></div>`:""}</div></div>`}).join("")
     : `<div class="empty">아직 숙제 기록이 없어요.</div>`;
   $("upd").textContent = D.updated ? D.updated+" 기준" : "";
   $("loginView").hidden=true; $("mainView").hidden=false; window.scrollTo(0,0);

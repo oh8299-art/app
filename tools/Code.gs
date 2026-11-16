@@ -214,16 +214,16 @@ function studentPayload_(store, sid) {
   var m = M.by[sid] || { points: 0, done: 0, rank: null }, w = W.by[sid] || { points: 0, rank: null };
   var byDate = function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0); };
   var className = function (id) { return classes[id] ? classes[id].name || "" : ""; };
-  var notices = asList_(store.getAll("notices")).filter(function (n) { return n.date && n.date >= kstDay_(-14) && n.date <= kstDay_(7) && n.text && (n.classId === "all" || (s.classId && n.classId === s.classId)); })
-    .sort(byDate).slice(0, 10).map(function (n) { return { date: n.date, text: n.text, cls: n.classId === "all" ? "전체" : className(n.classId) }; });
+  var notices = asList_(store.getAll("notices")).filter(function (n) { return n.date && n.date >= kstDay_(-14) && n.date <= kstDay_(7) && (n.text || n.lesson) && (n.classId === "all" || (s.classId && n.classId === s.classId)); })
+    .sort(byDate).slice(0, 10).map(function (n) { return { date: n.date, text: n.text, lesson: n.lesson || "", cls: n.classId === "all" ? "전체" : className(n.classId) }; });
   var tests = asList_(store.getAll("tests")).filter(function (t) { return t.sid === sid && t.date; }).sort(byDate).slice(0, 300)
     .map(function (t) { return { date: t.date, title: t.title || "", score: t.score == null ? "" : t.score, total: Number(t.total) || 0, memo: t.memo || "",
       photos: (t.photos || []).filter(function (x) { return typeof x === "string"; }).map(function (x) { return { id: x, t: "image/jpeg" }; }) }; });
   var mats = asList_(store.getAll("materials")).filter(function (x) { return x.sid === sid && x.date; }).sort(byDate).slice(0, 600)
     .map(function (x) { return { date: x.date, title: x.title || "", memo: x.memo || "",
       files: (x.files || []).filter(function (f) { return f && f.id; }).map(function (f) { return { id: f.id, t: f.type === "application/pdf" ? "application/pdf" : "image/jpeg", n: f.name || "" }; }) }; });
-  var homework = records.filter(function (r) { return r.sid === sid && r.date >= from && r.status && r.status !== "skip"; })
-    .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) { return { date: r.date, status: r.status, memo: r.memo || "",
+  var homework = records.filter(function (r) { return r.sid === sid && r.date >= from && ((r.status && r.status !== "skip") || r.att); })
+    .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) { return { date: r.date, status: r.status, memo: r.memo || "", att: Number(r.att) || 0,
       subs: (r.subs || []).map(function (x) { return { at: x.at, kind: x.kind, files: x.files || [], note: x.note || "" }; }) }; });
   var extra = {};
   allCols_(store).forEach(function (c) { if (c.indexOf("s_") !== 0) return;
@@ -238,9 +238,9 @@ function studentPayload_(store, sid) {
 /* ===== 구글 시트·드라이브 연결 부분 ===== */
 var VIEW_COLS = {
   students: [["name", "이름"], ["grade", "학년"], ["classId", "반ID"], ["code", "코드"], ["active", "사용"]],
-  records: [["date", "날짜"], ["sid", "학생ID"], ["status", "상태"], ["memo", "피드백"]],
+  records: [["date", "날짜"], ["sid", "학생ID"], ["status", "상태"], ["memo", "피드백"], ["att", "수업태도(별)"]],
   classes: [["name", "반 이름"], ["teacherId", "담당"]],
-  notices: [["date", "날짜"], ["classId", "반ID"], ["text", "공지"]],
+  notices: [["date", "날짜"], ["classId", "반ID"], ["text", "공지"], ["lesson", "학습내용"]],
   tests: [["date", "날짜"], ["sid", "학생ID"], ["title", "시험"], ["score", "점수"], ["total", "만점"], ["memo", "코멘트"]],
   materials: [["date", "날짜"], ["sid", "학생ID"], ["title", "자료"], ["memo", "설명"]],
   teachers: [["name", "이름"], ["code", "코드"]],
@@ -253,7 +253,7 @@ var STATUS_KO = { none: "미제출", sub: "제출(피드백 대기)", fix: "오�
 
 function makeStore_() {
   var ss = sheetFile_();
-  var memo = {}, rowsOf = {};
+  var memo = {}, rowsOf = {}, headChecked = {};
   function sheet(col) {
     var name = SHEET_NAMES[col] || col;
     var sh = ss.getSheetByName(name);
@@ -263,6 +263,12 @@ function makeStore_() {
       if (hasStudentName_(col)) head.push("학생 이름");
       sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight("bold");
       sh.setFrozenRows(1); sh.setColumnWidth(3, 60);
+    } else if (!headChecked[col]) {
+      headChecked[col] = true;
+      var want = ["id", "수정시각", "data(지우지 마세요)"].concat(viewCols_(col).map(function (c) { return c[1]; }));
+      if (hasStudentName_(col)) want.push("학생 이름");
+      var have = sh.getRange(1, 1, 1, want.length).getValues()[0];
+      if (have.join("|") !== want.join("|")) sh.getRange(1, 1, 1, want.length).setValues([want]).setFontWeight("bold");
     }
     return sh;
   }
