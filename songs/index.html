@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2457d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="수학날개 노래">
+<meta name="robots" content="noindex,nofollow">
+<link rel="apple-touch-icon" href="../icon.png">
+<link rel="icon" href="../icon.png">
+<link rel="manifest" href="manifest.json">
+<title>수학날개 노래방</title>
+<style>
+  :root{color-scheme:light;--blue:#2457d6;--bg:#edf4ff;--ink:#1d2433;--muted:#667089}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+       padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+  [hidden]{display:none!important}
+  header{background:var(--blue);color:#fff;padding:18px 18px 22px}
+  header h1{margin:0;font-size:22px}
+  header p{margin:4px 0 0;opacity:.85;font-size:14px}
+  main{max-width:640px;margin:0 auto;padding:16px 16px 120px}
+  .group{margin:18px 0 8px;font-size:14px;font-weight:700;color:var(--muted)}
+  .song{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:#fff;border:0;border-radius:16px;padding:14px 16px;margin:8px 0;
+        box-shadow:0 1px 4px rgba(20,40,90,.08);cursor:pointer;font:inherit;color:inherit}
+  .song .dot{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;color:#fff;font-size:20px}
+  .song b{display:block;font-size:17px}
+  .song span{color:var(--muted);font-size:14px}
+  .back{background:none;border:0;color:#fff;font:inherit;font-size:15px;padding:0;margin-bottom:8px;cursor:pointer}
+  .card{background:#fff;border-radius:16px;padding:16px 18px;margin:14px 0;box-shadow:0 1px 4px rgba(20,40,90,.08)}
+  .card h2{margin:0 0 10px;font-size:16px;color:var(--blue)}
+  .concept{margin:0;padding-left:20px;font-size:17px;font-weight:600}
+  table{width:100%;border-collapse:collapse;font-size:17px}
+  td{padding:7px 4px;border-bottom:1px solid #eef1f7;text-align:center}
+  td.a{font-weight:700;color:#e0600a}
+  .lyr{white-space:pre-wrap;font-size:17px;line-height:1.8;margin:0}
+  .lyr .tag{display:inline-block;margin-top:10px;font-size:13px;font-weight:700;color:#fff;background:#9aa6c4;border-radius:8px;padding:1px 8px}
+  /* 재생바 */
+  .player{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 12px rgba(20,40,90,.12);
+          padding:12px 16px calc(12px + env(safe-area-inset-bottom,0))}
+  .pin{max-width:640px;margin:0 auto}
+  .row{display:flex;align-items:center;gap:12px}
+  .play{flex:none;width:56px;height:56px;border-radius:50%;border:0;background:var(--blue);color:#fff;font-size:22px;cursor:pointer}
+  .ttl{flex:1;min-width:0}
+  .ttl b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .time{font-size:13px;color:var(--muted)}
+  input[type=range]{width:100%;margin:8px 0 4px;accent-color:var(--blue)}
+  .opts{display:flex;gap:6px;flex-wrap:wrap}
+  .opt{border:1px solid #cdd6ea;background:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer}
+  .opt.on{background:var(--blue);border-color:var(--blue);color:#fff}
+</style>
+</head>
+<body>
+
+<!-- 목록 화면 -->
+<section id="listView">
+  <header>
+    <h1>🎵 수학날개 노래방</h1>
+    <p>노래로 외우는 수학 개념</p>
+  </header>
+  <main id="list"></main>
+</section>
+
+<!-- 노래 화면 -->
+<section id="songView" hidden>
+  <header>
+    <button class="back" id="back">← 노래 목록</button>
+    <h1 id="sTitle"></h1>
+    <p id="sSub"></p>
+  </header>
+  <main>
+    <div class="card" id="cConcept"><h2>꼭 기억해요</h2><ul class="concept" id="sConcept"></ul></div>
+    <div class="card" id="cTable"><h2>한눈에 보기</h2><table id="sTable"></table></div>
+    <div class="card"><h2>가사</h2><p class="lyr" id="sLyrics"></p></div>
+  </main>
+</section>
+
+<!-- 재생바 -->
+<div class="player" id="player" hidden>
+  <div class="pin">
+    <div class="row">
+      <button class="play" id="playBtn" aria-label="재생">▶</button>
+      <div class="ttl"><b id="pTitle"></b><span class="time" id="pTime">0:00 / 0:00</span></div>
+    </div>
+    <input type="range" id="seek" min="0" max="100" value="0" step="0.1" aria-label="재생 위치">
+    <div class="opts">
+      <button class="opt" data-rate="0.8">천천히</button>
+      <button class="opt on" data-rate="1">보통</button>
+      <button class="opt" id="loopBtn">🔁 반복</button>
+    </div>
+  </div>
+</div>
+
+<audio id="au" preload="metadata"></audio>
+
+<script src="songs.js"></script>
+<script>
+(function(){
+  var S = window.SONGS || [];
+  var $ = function(id){ return document.getElementById(id); };
+  var au = $("au"), cur = null;
+
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function fmt(s){ if(!isFinite(s)) return "0:00"; s=Math.floor(s); return Math.floor(s/60)+":"+("0"+s%60).slice(-2); }
+
+  // 목록 그리기 (grade 별로 묶기)
+  var groups = {}, order = [];
+  S.forEach(function(s){ var g = s.grade || "기타"; if(!groups[g]){ groups[g]=[]; order.push(g); } groups[g].push(s); });
+  $("list").innerHTML = order.map(function(g){
+    return '<div class="group">'+esc(g)+'</div>' + groups[g].map(function(s){
+      return '<button class="song" data-id="'+esc(s.id)+'"><div class="dot" style="background:'+esc(s.color||"#2457d6")+'">♪</div>'+
+             '<div><b>'+esc(s.title)+'</b><span>'+esc(s.sub||"")+'</span></div></button>';
+    }).join("");
+  }).join("") || '<p>아직 노래가 없어요.</p>';
+  $("list").addEventListener("click", function(e){
+    var b = e.target.closest(".song"); if(b) location.hash = b.getAttribute("data-id");
+  });
+  $("back").addEventListener("click", function(){ location.hash = ""; });
+
+  function showSong(s){
+    $("sTitle").textContent = s.title;
+    $("sSub").textContent = s.sub || "";
+    $("cConcept").hidden = !(s.concept && s.concept.length);
+    $("sConcept").innerHTML = (s.concept||[]).map(function(c){ return "<li>"+esc(c)+"</li>"; }).join("");
+    $("cTable").hidden = !(s.table && s.table.length);
+    var t = s.table || [], half = Math.ceil(t.length/2), rows = "";
+    for(var i=0;i<half;i++){
+      var a=t[i], b=t[i+half];
+      rows += "<tr><td>"+esc(a[0])+'</td><td class="a">'+esc(a[1])+"</td>"+(b?"<td>"+esc(b[0])+'</td><td class="a">'+esc(b[1])+"</td>":"<td></td><td></td>")+"</tr>";
+    }
+    $("sTable").innerHTML = rows;
+    $("sLyrics").innerHTML = esc(s.lyrics||"").replace(/^\[(.+)\]$/gm, '<span class="tag">$1</span>');
+    if(!cur || cur.id !== s.id){
+      cur = s;
+      au.src = "audio/" + s.file;
+      au.playbackRate = rate;
+      $("pTitle").textContent = s.title;
+      $("pTime").textContent = "0:00 / 0:00";
+      $("seek").value = 0;
+    }
+    $("player").hidden = false;
+    $("listView").hidden = true; $("songView").hidden = false;
+    window.scrollTo(0,0);
+  }
+  function route(){
+    var id = location.hash.replace("#",""), s = null;
+    S.forEach(function(x){ if(x.id===id) s=x; });
+    if(s){ showSong(s); }
+    else { $("songView").hidden = true; $("listView").hidden = false; }
+  }
+  window.addEventListener("hashchange", route);
+
+  // 재생바
+  var rate = 1;
+  $("playBtn").addEventListener("click", function(){
+    if(au.paused){ var p = au.play(); if(p && p.catch) p.catch(function(){}); } else au.pause();
+  });
+  au.addEventListener("play", function(){ $("playBtn").textContent = "❚❚"; });
+  au.addEventListener("pause", function(){ $("playBtn").textContent = "▶"; });
+  au.addEventListener("timeupdate", function(){
+    $("pTime").textContent = fmt(au.currentTime)+" / "+fmt(au.duration);
+    if(au.duration) $("seek").value = au.currentTime/au.duration*100;
+  });
+  au.addEventListener("loadedmetadata", function(){ $("pTime").textContent = "0:00 / "+fmt(au.duration); au.playbackRate = rate; });
+  $("seek").addEventListener("input", function(){ if(au.duration) au.currentTime = this.value/100*au.duration; });
+  document.querySelectorAll("[data-rate]").forEach(function(b){
+    b.addEventListener("click", function(){
+      rate = parseFloat(b.getAttribute("data-rate")); au.playbackRate = rate;
+      document.querySelectorAll("[data-rate]").forEach(function(x){ x.classList.toggle("on", x===b); });
+    });
+  });
+  $("loopBtn").addEventListener("click", function(){ au.loop = !au.loop; this.classList.toggle("on", au.loop); });
+
+  route();
+})();
+</script>
+</body>
+</html>
