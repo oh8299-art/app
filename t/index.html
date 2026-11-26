@@ -3,9 +3,9 @@
 <meta name="apple-mobile-web-app-title" content="숙제체크"><link rel="apple-touch-icon" href="../icon.png"><link rel="icon" href="../icon.png">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26c">
+<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26d">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
-(function(){ var V="2026-11-26c"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+(function(){ var V="2026-11-26d"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
 setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>수학날개 숙제체크</title>
@@ -734,7 +734,8 @@ const pendingFiles={}, formStatus={};
 function showPF(id){ const lab=document.getElementById("pf-"+id); if(!lab) return; const L=pendingFiles[id]||[], n=L.length;
   let desc=`${n}개 준비됨`;
   if(/^wq-/.test(id)&&n){ const sid=id.slice(3), sol=(pendingFiles["ws-"+sid]||[]).length;
-    desc = sol||n===1 ? `문제 ${n}개 준비됨${n===1&&!sol?" · 정답 파일도 같이 고르면 정답을 자동으로 읽어요":""}` : `문제: ${esc(L[0].name||"파일1")} · 정답·풀이: ${L.slice(1).map(f=>esc(f.name||"파일")).join(", ")}`; }
+    const sp=wrongSplit(sid);
+    desc = sol||n===1 ? `문제 ${n}개 준비됨${n===1&&!sol?" · 정답 파일도 같이 고르면 정답을 자동으로 읽어요":""}` : `<br>📄 문제: ${sp.q.map(f=>esc(f.name||"파일")).join(", ")}<br>📖 정답·풀이: ${sp.sol.map(f=>esc(f.name||"파일")).join(", ")}<br>`; }
   lab.innerHTML = n ? ` ✅ ${desc} <button type="button" class="ghost" data-pfclear="${id}" style="margin-left:8px;padding:3px 10px;font-size:12px">✕ 고른 파일 취소</button>` : ""; }
 const fsTimers={};
 function setFS(id,text,cls){
@@ -936,7 +937,11 @@ function renderFees(){
 function fileTile(f,label){ const pdf=f.type==="application/pdf"; return pdf?`<a class="ftile" href="#" data-fopen="${esc(f.id)}">📄 <span>${esc(f.name||label||"PDF")}</span></a>`:`<a href="#" data-fopen="${esc(f.id)}" style="display:block;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)"><img data-fid="${esc(f.id)}" alt="${esc(f.name||label||"사진")}" style="width:100%;height:100%;object-fit:cover"></a>`; }
 /* ---------- 오답 노트 ---------- */
 function wrongSplit(sid){ const wq=pendingFiles["wq-"+sid]||[], ws=pendingFiles["ws-"+sid]||[];
-  if(ws.length||wq.length<2) return {q:wq,sol:ws}; return {q:wq.slice(0,1),sol:wq.slice(1)}; }
+  if(ws.length||wq.length<2) return {q:wq,sol:ws};
+  const isAns=f=>/(정답|풀이|해설|답지|답안|answer|solution)/i.test(f.name||"");
+  const a=wq.filter(isAns), q=wq.filter(f=>!isAns(f));
+  if(a.length&&q.length) return {q,sol:a}; // 파일 이름에 '정답·풀이·해설'이 있으면 그 파일이 정답
+  return {q:wq.slice(0,1),sol:wq.slice(1)}; }
 const ocrState={};
 function guessAns(text,title){
   const t=String(text||"").replace(/\r/g,"").replace(/[ \t]+/g," ").trim(); if(!t) return "";
@@ -958,8 +963,10 @@ async function wrongOcr(sid){
     const b64=await new Promise((ok,bad)=>{ const fr=new FileReader(); fr.onload=()=>ok(String(fr.result).split(",")[1]||""); fr.onerror=bad; fr.readAsDataURL(blob); });
     const r=await SN.API.call({op:"ocr",type:isPdf?"application/pdf":"image/jpeg",b64});
     if(ocrState[sid]!==st) return;
-    if(!r.ok){ put(r.error==="need_drive"||r.error==="bad_op"
-      ? `⚠ 정답 자동 읽기를 쓰려면 서버 설정이 한 번 필요해요. (원장님께 'Drive API 서비스 추가'를 부탁해 주세요) 지금은 정답을 직접 써 주세요.`
+    if(!r.ok){ put(r.error==="bad_op"
+      ? `⚠ 서버가 아직 예전 버전이에요. Apps Script에서 <b>배포 → 배포 관리 → ✏️ → 새 버전 → 배포</b>를 해 주세요. 지금은 정답을 직접 써 주세요.`
+      : r.error==="need_drive"
+      ? `⚠ 정답 자동 읽기를 쓰려면 Apps Script에 'Drive API' 서비스를 추가하고 새 버전으로 배포해 주세요. 지금은 정답을 직접 써 주세요.`
       : `⚠ ${esc(r.message||"글씨를 읽지 못했어요")} — 정답을 직접 써 주세요.`,st); return; }
     const text=String(r.text||"").trim();
     if(!text){ put("글씨를 찾지 못했어요. 정답을 직접 써 주세요.",st); return; }
