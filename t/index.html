@@ -3,7 +3,7 @@
 <meta name="apple-mobile-web-app-title" content="숙제체크"><link rel="apple-touch-icon" href="../icon.png"><link rel="icon" href="../icon.png">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26e">
+<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-27a">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
 (function(){ var V="2026-11-26e"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
@@ -773,7 +773,7 @@ const UQ=(()=>{
     if(running&&!tick) tick=setInterval(()=>{ if(running) bar(); },1000);
   }
   async function add(o){
-    const j={id:"j"+Date.now()+Math.random().toString(36).slice(2,6),kind:o.kind||"materials",answer:o.answer||"",nq:o.nq||0,sids:o.sids,date:o.date,title:o.title,memo:o.memo||"",label:o.label||o.title,by:me||"",files:o.files.slice(),done:o.files.map(()=>null),createdAt:Date.now()};
+    const j={id:"j"+Date.now()+Math.random().toString(36).slice(2,6),kind:o.kind||"materials",answer:o.answer||"",text:o.text||"",solText:o.solText||"",nq:o.nq||0,sids:o.sids,date:o.date,title:o.title,memo:o.memo||"",label:o.label||o.title,by:me||"",files:o.files.slice(),done:o.files.map(()=>null),createdAt:Date.now()};
     jobs.push(j); await save(j); run(); }
   async function upOne(j,i){
     const x=j.files[i]; const isPdf=x.type==="application/pdf"||/\.pdf$/i.test(x.name||"");
@@ -795,7 +795,7 @@ const UQ=(()=>{
         const now=Date.now();
         if(j.kind==="wrong"){
           const nq=j.nq||j.done.length, q=j.done.slice(0,nq), sol=j.done.slice(nq);
-          const items=j.sids.map((sid,i)=>{ const d={sid,date:j.date,title:j.title,answer:j.answer,memo:j.memo,q,sol,clears:0,cleared:false,tries:0,createdAt:now+i}; if(j.by) d.by=j.by; return d; });
+          const items=j.sids.map((sid,i)=>{ const d={sid,date:j.date,title:j.title,answer:j.answer,memo:j.memo,text:j.text||"",solText:j.solText||"",q,sol,clears:0,cleared:false,tries:0,createdAt:now+i}; if(j.by) d.by=j.by; return d; });
           await db.collection("s_wrong").addMany(items);
         } else {
         const items=j.sids.map(sid=>{ const d={sid,date:j.date,title:j.title,memo:j.memo,files:j.done,createdAt:now}; if(j.by) d.by=j.by; return d; });
@@ -996,14 +996,16 @@ function wrongPanel(s){
       <input class="w2" id="wt-${s.id}" placeholder="문제 이름 (예: 왕수학 32쪽 5번)" aria-label="문제 이름">
       <textarea class="w2" id="wa-${s.id}" rows="2" placeholder="정답 (꼭 써 주세요)&#10;문제가 여러 개면 한 줄에 하나씩: 1) 36  2) 12" aria-label="정답" autocomplete="off" style="min-height:44px"></textarea>
       <input class="w4" id="wm-${s.id}" placeholder="힌트 한 줄 (선택 · 문제 아래에 보여요)" aria-label="힌트">
-      <label class="file">① 문제 + 정답 파일을 같이 고르세요 — 사진 또는 PDF<br><small style="font-weight:400">첫 번째 파일 = 문제, 두 번째부터 = 정답·풀이 (정답 글씨는 자동으로 읽어요)</small><br><input id="wq-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-wq-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-wq-${s.id}" hidden></p>
+      <textarea class="w4" id="wx-${s.id}" rows="2" placeholder="문제를 글로 쓰기 (사진 대신 · 예: 12와 18의 최대공약수를 구하세요)" aria-label="문제 글" style="min-height:44px"></textarea>
+      <textarea class="w4" id="wy-${s.id}" rows="2" placeholder="풀이 과정 글 (선택 · 학생이 답을 쓴 뒤에만 보여요)" aria-label="풀이 글" style="min-height:44px"></textarea>
+      <label class="file">① 문제 + 정답 파일을 같이 고르세요 — 사진 또는 PDF (문제를 글로 썼으면 안 골라도 돼요)<br><small style="font-weight:400">첫 번째 파일 = 문제, 두 번째부터 = 정답·풀이 (정답 글씨는 자동으로 읽어요)</small><br><input id="wq-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-wq-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-wq-${s.id}" hidden></p>
       <div class="w4" id="wo-${s.id}" ${ocrState[s.id]&&ocrState[s.id].html?"":"hidden"} style="border:1px dashed var(--line);border-radius:10px;padding:8px 10px;font-size:13px">${(ocrState[s.id]&&ocrState[s.id].html)||""}</div>
       <label class="file">② 정답·풀이 파일을 따로 고를 때만 (선택 · 학생이 답을 쓴 뒤에만 보여요)<br><input id="ws-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-ws-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-ws-${s.id}" hidden></p>
       <button class="act w4" type="submit">오답 문제 만들기</button><p class="fmsg w4" id="fs-wf-${s.id}"></p>
-      <p class="hint w4" style="margin:0">한 장에 문제가 여러 개면 정답을 <b>한 줄에 하나씩</b> 써요 (예: 1) 36 ↵ 2) 12). 학생 앱에 문제마다 답칸이 생기고, <b>답을 써야</b> 풀이가 보여요. 문제마다 <b>2번 맞히면</b> 그 문제는 끝, 모두 끝나면 클리어 목록으로 가요. 정답이 여러 형태면 <b>|</b> 로 (예: 1/2 | 0.5). 단위·쉼표·띄어쓰기는 달라도 맞게 쳐요.</p>
+      <p class="hint w4" style="margin:0">한 장에 문제가 여러 개면 정답을 <b>한 줄에 하나씩</b> 써요 (예: 1) 36 ↵ 2) 12). 학생 앱에 문제마다 답칸이 생기고, <b>답을 써야</b> 풀이가 보여요. 문제마다 <b>다른 날 2번 맞히면</b> 그 문제는 끝, 모두 끝나면 클리어 목록으로 가요. 정답이 여러 형태면 <b>|</b> 로 (예: 1/2 | 0.5). 단위·쉼표·띄어쓰기는 달라도 맞게 쳐요.</p>
     </form>
     <div class="seg" style="margin:6px 0"><button type="button" data-wtab="left" aria-pressed="${wrongTab!=="done"}">남은 오답 ${left.length}</button><button type="button" data-wtab="done" aria-pressed="${wrongTab==="done"}">클리어 ${done.length}</button></div>
-    ${list.length?list.map(w=>`<div class="titem"><div>${esc(w.title||"오답")} <small>${esc((w.date||"").slice(5).replace("-","/"))}${w.tries?` · ${w.tries}번 풀이${w.lastAns?` (마지막 답: ${esc(w.lastAns)})`:""}`:""}${w.cleared?` · ${esc((w.clearedAt||"").slice(5).replace("-","/"))} 클리어`:""}</small>
+    ${list.length?list.map(w=>`<div class="titem"><div>${esc(w.title||"오답")}${w.text?`<div style="font-size:13px;white-space:pre-wrap;margin:2px 0">📝 ${esc(w.text)}</div>`:""} <small>${esc((w.date||"").slice(5).replace("-","/"))}${w.tries?` · ${w.tries}번 풀이${w.lastAns?` (마지막 답: ${esc(w.lastAns)})`:""}`:""}${w.cleared?` · ${esc((w.clearedAt||"").slice(5).replace("-","/"))} 클리어`:""}</small>
         <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap">${dots(w)}<label style="font-size:12px;color:var(--muted);display:flex;gap:4px;align-items:flex-start">정답 <textarea data-wans="${w.id}" rows="${Math.min(6,Math.max(1,String(w.answer||"").split("\n").length))}" placeholder="정답을 써 주세요" style="width:170px;padding:5px 8px;font-size:13px;${String(w.answer||"").trim()?"":"border-color:#e5484d"}" aria-label="정답">${esc(w.answer||"")}</textarea></label>${subStat(w)}${String(w.answer||"").trim()?"":`<small style="color:#e5484d">정답이 없으면 학생에게 안 보여요</small>`}</div></div>
       <span></span><span style="display:flex;gap:4px;flex-direction:column">${w.cleared||w.clears?`<button class="ghost" data-wreset="${w.id}" style="font-size:12px;padding:4px 8px">다시 풀기</button>`:""}<button class="danger" data-wdel="${w.id}">삭제</button></span>
       <div class="thumbs">${qf(w).map(f=>fileTile({id:f.id,type:f.type||f.t},"문제")).join("")}${(w.sol||[]).length?`<small style="align-self:center;color:var(--muted)">풀이 →</small>`+w.sol.map(f=>fileTile({id:f.id,type:f.type||f.t},"풀이")).join(""):""}</div></div>`).join("")
@@ -1238,11 +1240,16 @@ $("slist").addEventListener("submit",async e=>{
   if(wf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
     const sid=wf.dataset.wform, fid="wf-"+sid; const g=k=>$(k+"-"+sid).value.trim();
     const sp=wrongSplit(sid), qs=sp.q, ss=sp.sol;
-    if(!qs.length) return setFS(fid,"① 문제 사진이나 PDF를 골라 주세요.","bad");
+    if(!qs.length&&!g("wx")) return setFS(fid,"① 문제 사진·PDF를 고르거나, 문제를 글로 써 주세요.","bad");
     if(!g("wa")) { $("wa-"+sid).focus(); return setFS(fid,"정답을 써 주세요. 모든 오답은 주관식이라 정답이 있어야 채점돼요.","bad"); }
     const big=[...qs,...ss].find(x=>x.size>10*1024*1024&&(x.type==="application/pdf"||/\.pdf$/i.test(x.name||""))); if(big) return setFS(fid,`${big.name} 파일이 10MB보다 커요.`,"bad");
-    await UQ.add({kind:"wrong",nq:qs.length,sids:[sid],date:TODAY,title:g("wt")||"오답",answer:g("wa"),memo:g("wm"),files:[...qs,...ss],label:((students.find(x=>x.id===sid)||{}).name||"")+" 오답"});
-    delete pendingFiles["wq-"+sid]; delete pendingFiles["ws-"+sid]; showPF("wq-"+sid); showPF("ws-"+sid); ["wt","wa","wm"].forEach(k=>$(k+"-"+sid).value=""); const ob=$("wo-"+sid); if(ob){ ob.hidden=true; ob.innerHTML=""; } delete ocrState[sid];
+    const base={sid,date:TODAY,title:g("wt")||"오답",answer:g("wa"),memo:g("wm"),text:g("wx"),solText:g("wy")};
+    if(!qs.length&&!ss.length){ // 글로만 만든 오답 — 올릴 파일이 없으니 바로 저장
+      try{ const d=Object.assign({},base,{q:[],sol:[],clears:0,cleared:false,tries:0,createdAt:Date.now()}); if(me) d.by=me; await db.collection("s_wrong").addMany([d]); }
+      catch(err){ return handleWriteErr(err); }
+      ["wt","wa","wm","wx","wy"].forEach(k=>$(k+"-"+sid).value=""); setFS(fid,"✅ 오답 문제를 만들었어요 · 학생 앱 오답 노트에 보여요","ok"); return; }
+    await UQ.add({kind:"wrong",nq:qs.length,sids:[sid],date:TODAY,title:base.title,answer:base.answer,memo:base.memo,text:base.text,solText:base.solText,files:[...qs,...ss],label:((students.find(x=>x.id===sid)||{}).name||"")+" 오답"});
+    delete pendingFiles["wq-"+sid]; delete pendingFiles["ws-"+sid]; showPF("wq-"+sid); showPF("ws-"+sid); ["wt","wa","wm","wx","wy"].forEach(k=>$(k+"-"+sid).value=""); const ob=$("wo-"+sid); if(ob){ ob.hidden=true; ob.innerHTML=""; } delete ocrState[sid];
     setFS(fid,"⬆ 오답 문제를 만들고 있어요. 아래 막대에서 진행 상황이 보여요 — 다음 문제를 바로 넣어도 돼요.","ok");
     return; }
   const mf=e.target.closest("[data-mform]");

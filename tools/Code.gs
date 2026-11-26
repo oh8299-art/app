@@ -99,10 +99,11 @@ function handle(store, req) {
       for (var i = 0; i < parts.length; i++) {
         if (!(i in given) && !(String(i) in given)) continue;
         var v = String(given[i] == null ? "" : given[i]).trim(); if (!v) continue;
-        any = true; var ok = ansMatch_(v, parts[i].a), sb = subs[i];
-        if (ok) { if (!sb.done) { sb.c = (sb.c || 0) + 1; if (sb.c >= WRONG_CLEAR_N) { sb.done = true; sb.at = today; } } }
+        any = true; var ok = ansMatch_(v, parts[i].a), sb = subs[i], same = false;
+        if (ok) { if (!sb.done) { if (sb.d === today) same = true; // 같은 날은 한 번만 셈 (다른 날 2번 맞혀야 클리어)
+            else { sb.c = (sb.c || 0) + 1; sb.d = today; if (sb.c >= WRONG_CLEAR_N) { sb.done = true; sb.at = today; } } } }
         else { sb.m = (sb.m || 0) + 1; }
-        res.push({ i: i, l: parts[i].l, mine: v, ok: ok, answer: parts[i].a, done: !!sb.done, c: sb.c || 0 });
+        res.push({ i: i, l: parts[i].l, mine: v, ok: ok, answer: parts[i].a, done: !!sb.done, c: sb.c || 0, same: same });
       }
       if (!any) return { error: "empty", message: "답을 먼저 써 주세요." };
       d.sub = subs; d.tries = (d.tries || 0) + 1; d.lastTry = today;
@@ -111,7 +112,7 @@ function handle(store, req) {
       if (subs.every(function (x) { return x.done; }) && !d.cleared) { d.cleared = true; d.clearedAt = today; }
       d.updatedAt = Date.now(); store.put("s_wrong", id, d);
       var o = wrongOut_(d); o.id = id;
-      return { ok: true, results: res, correct: res.every(function (r) { return r.ok; }), nowCleared: !was && !!d.cleared, sol: wrongFiles_(d.sol), item: o };
+      return { ok: true, results: res, correct: res.every(function (r) { return r.ok; }), nowCleared: !was && !!d.cleared, sol: wrongFiles_(d.sol), solText: String(d.solText || ""), item: o };
     });
   }
 
@@ -220,7 +221,7 @@ function handle(store, req) {
   return { error: "bad_op", message: "알 수 없는 요청이에요." };
 }
 
-var WRONG_CLEAR_N = 2; // 2번 맞히면 클리어(오답 목록에서 사라짐)
+var WRONG_CLEAR_N = 2; // 다른 날 2번 맞히면 클리어(오답 목록에서 사라짐) — 같은 날 여러 번 맞혀도 1번으로 셈
 function wrongFiles_(x) { return (x || []).map(function (f) { return typeof f === "string" ? { id: f, t: "image/jpeg" } : { id: f.id, t: f.type || f.t || "image/jpeg", n: f.name || f.n || "" }; }); }
 function wrongQ_(d) { var q = wrongFiles_(d.q); if (!q.length && d.photo) q = [{ id: d.photo, t: "image/jpeg" }]; return q; }
 function parseAns_(txt) { // "1) 36\n2) 12" 또는 "36" → [{l:"1", a:"36"}, ...]
@@ -231,8 +232,8 @@ function parseAns_(txt) { // "1) 36\n2) 12" 또는 "36" → [{l:"1", a:"36"}, ..
 function wrongSubs_(d, n) { var s = (d.sub || []).slice(0, n); while (s.length < n) s.push({ c: 0, done: false });
   if (n === 1 && !(d.sub && d.sub.length) && d.clears) { s[0].c = d.clears; s[0].done = !!d.cleared; } return s; }
 function wrongOut_(d) { var parts = parseAns_(d.answer), subs = wrongSubs_(d, parts.length);
-  return { id: d.id, date: d.date, title: d.title || "", memo: d.memo || "", q: wrongQ_(d), hasSol: !!(d.sol && d.sol.length),
-  subs: parts.map(function (p, i) { return { l: p.l, c: subs[i].c || 0, done: !!subs[i].done }; }),
+  return { id: d.id, date: d.date, title: d.title || "", memo: d.memo || "", text: String(d.text || ""), q: wrongQ_(d), hasSol: !!((d.sol && d.sol.length) || String(d.solText || "").trim()),
+  subs: parts.map(function (p, i) { return { l: p.l, c: subs[i].c || 0, done: !!subs[i].done, d: subs[i].d || "" }; }),
   clears: d.clears || 0, need: WRONG_CLEAR_N, cleared: !!d.cleared, clearedAt: d.clearedAt || "", tries: d.tries || 0 }; }
 function normAns_(x) { return String(x == null ? "" : x).replace(/[\uFF01-\uFF5E]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
   .replace(/\s+/g, "").replace(/[.,]$/,"").replace(/(번|개|cm|mm|m|km|kg|g|L|mL|원|명|장|쪽|살|시간|분|초|도|°)$/i, "").toLowerCase(); }
@@ -291,7 +292,7 @@ function studentPayload_(store, sid) {
   allCols_(store).forEach(function (c) { if (c.indexOf("s_") !== 0 || c === "s_wrong") return;
     extra[c] = asList_(store.getAll(c)).filter(function (d) { return d.sid === sid; }).sort(byDate).slice(0, 100)
       .map(function (d) { var o = {}; for (var k in d) if (k !== "by" && k !== "sid") o[k] = d[k]; return o; }); });
-  var wrong = asList_(store.getAll("s_wrong")).filter(function (d) { return d.sid === sid && wrongQ_(d).length && String(d.answer || "").trim(); }).sort(byDate).slice(0, 800).map(wrongOut_);
+  var wrong = asList_(store.getAll("s_wrong")).filter(function (d) { return d.sid === sid && (wrongQ_(d).length || String(d.text || "").trim()) && String(d.answer || "").trim(); }).sort(byDate).slice(0, 800).map(wrongOut_);
   var t = kstNow_().toISOString();
   return { month: month, week: week, updated: t.slice(0, 10) + " " + t.slice(11, 16), top: M.top, topWeek: W.top,
     me: { name: s.name || "", grade: s.grade || "", className: className(s.classId), points: m.points, done: m.done, rank: m.rank,
