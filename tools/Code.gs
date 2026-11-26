@@ -91,18 +91,27 @@ function handle(store, req) {
   /* ---- 오답 노트 (학생은 풀기만, 넣기는 선생님) ---- */
   if (op === "wrong_try") {
     if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 풀어 주세요." };
-    var tans = String(req.ans == null ? "" : req.ans).trim();
-    if (!tans) return { error: "empty", message: "답을 먼저 써 주세요." };
+    var given = req.ans; if (typeof given !== "object" || given === null) given = { 0: given };
     return store.withLock(function () {
       var all = store.getAll("s_wrong"), id = String(req.id || ""), d = all[id];
       if (!d || d.sid !== who.id) return { error: "not_found", message: "오답을 찾을 수 없어요." };
-      var ok = ansMatch_(tans, d.answer || ""), today = kstDay_(0), was = !!d.cleared;
-      d.tries = (d.tries || 0) + 1; d.lastTry = today; d.lastAns = tans.slice(0, 60);
-      if (ok) { if (!d.cleared) { d.clears = (d.clears || 0) + 1; if (d.clears >= WRONG_CLEAR_N) { d.cleared = true; d.clearedAt = today; } } }
-      else d.misses = (d.misses || 0) + 1;
+      var parts = parseAns_(d.answer), subs = wrongSubs_(d, parts.length), today = kstDay_(0), was = !!d.cleared, res = [], any = false;
+      for (var i = 0; i < parts.length; i++) {
+        if (!(i in given) && !(String(i) in given)) continue;
+        var v = String(given[i] == null ? "" : given[i]).trim(); if (!v) continue;
+        any = true; var ok = ansMatch_(v, parts[i].a), sb = subs[i];
+        if (ok) { if (!sb.done) { sb.c = (sb.c || 0) + 1; if (sb.c >= WRONG_CLEAR_N) { sb.done = true; sb.at = today; } } }
+        else { sb.m = (sb.m || 0) + 1; }
+        res.push({ i: i, l: parts[i].l, mine: v, ok: ok, answer: parts[i].a, done: !!sb.done, c: sb.c || 0 });
+      }
+      if (!any) return { error: "empty", message: "답을 먼저 써 주세요." };
+      d.sub = subs; d.tries = (d.tries || 0) + 1; d.lastTry = today;
+      d.lastAns = res.map(function (r) { return (parts.length > 1 ? r.l + ")" : "") + r.mine; }).join(" ").slice(0, 80);
+      d.clears = Math.min.apply(null, subs.map(function (x) { return x.c || 0; }));
+      if (subs.every(function (x) { return x.done; }) && !d.cleared) { d.cleared = true; d.clearedAt = today; }
       d.updatedAt = Date.now(); store.put("s_wrong", id, d);
       var o = wrongOut_(d); o.id = id;
-      return { ok: true, correct: ok, nowCleared: !was && !!d.cleared, answer: String(d.answer || ""), sol: wrongFiles_(d.sol), item: o };
+      return { ok: true, results: res, correct: res.every(function (r) { return r.ok; }), nowCleared: !was && !!d.cleared, sol: wrongFiles_(d.sol), item: o };
     });
   }
 
@@ -214,13 +223,23 @@ function handle(store, req) {
 var WRONG_CLEAR_N = 2; // 2번 맞히면 클리어(오답 목록에서 사라짐)
 function wrongFiles_(x) { return (x || []).map(function (f) { return typeof f === "string" ? { id: f, t: "image/jpeg" } : { id: f.id, t: f.type || f.t || "image/jpeg", n: f.name || f.n || "" }; }); }
 function wrongQ_(d) { var q = wrongFiles_(d.q); if (!q.length && d.photo) q = [{ id: d.photo, t: "image/jpeg" }]; return q; }
-function wrongOut_(d) { return { id: d.id, date: d.date, title: d.title || "", memo: d.memo || "", q: wrongQ_(d), hasSol: !!(d.sol && d.sol.length),
+function parseAns_(txt) { // "1) 36\n2) 12" 또는 "36" → [{l:"1", a:"36"}, ...]
+  var lines = String(txt || "").split(/\n+/).map(function (x) { return x.trim(); }).filter(function (x) { return x; });
+  if (lines.length === 1 && !/^\(?\d{1,3}\s*[.)번:]/.test(lines[0])) return [{ l: "", a: lines[0] }];
+  return lines.map(function (x, k) { var m = x.match(/^\(?(\d{1,3})\s*[.)번:]\s*(.+)$/); return m ? { l: m[1], a: m[2].trim() } : { l: String(k + 1), a: x }; });
+}
+function wrongSubs_(d, n) { var s = (d.sub || []).slice(0, n); while (s.length < n) s.push({ c: 0, done: false });
+  if (n === 1 && !(d.sub && d.sub.length) && d.clears) { s[0].c = d.clears; s[0].done = !!d.cleared; } return s; }
+function wrongOut_(d) { var parts = parseAns_(d.answer), subs = wrongSubs_(d, parts.length);
+  return { id: d.id, date: d.date, title: d.title || "", memo: d.memo || "", q: wrongQ_(d), hasSol: !!(d.sol && d.sol.length),
+  subs: parts.map(function (p, i) { return { l: p.l, c: subs[i].c || 0, done: !!subs[i].done }; }),
   clears: d.clears || 0, need: WRONG_CLEAR_N, cleared: !!d.cleared, clearedAt: d.clearedAt || "", tries: d.tries || 0 }; }
 function normAns_(x) { return String(x == null ? "" : x).replace(/[\uFF01-\uFF5E]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
   .replace(/\s+/g, "").replace(/[.,]$/,"").replace(/(번|개|cm|mm|m|km|kg|g|L|mL|원|명|장|쪽|살|시간|분|초|도|°)$/i, "").toLowerCase(); }
+function numOf_(t) { t = String(t).replace(/,/g, ""); return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : NaN; } // 분수는 그대로 비교(약분 안 한 답은 틀림)
 function ansMatch_(got, ans) { var g = normAns_(got); if (!g) return false;
   return String(ans).split(/\s*\|\s*|\s*\/\/\s*/).some(function (a) { var n = normAns_(a); if (!n) return false; if (n === g) return true;
-    var x = Number(n.replace(/,/g, "")), y = Number(g.replace(/,/g, "")); return !isNaN(x) && !isNaN(y) && Math.abs(x - y) < 1e-9; }); }
+    var x = numOf_(n), y = numOf_(g); return !isNaN(x) && !isNaN(y) && Math.abs(x - y) < 1e-9; }); }
 function studentOwnsFile_(store, sid, fid) {
   if (store.fileDesc && store.fileDesc(fid) === "sid:" + sid) return true;
   var w = store.getAll("s_wrong"); for (var c in w) { var x = w[c]; if (x.sid !== sid) continue;
