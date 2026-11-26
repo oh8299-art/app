@@ -76,6 +76,18 @@ function handle(store, req) {
     var sname = (who.name || "학생") + "_숙제_" + kstDay_(0) + ".jpg";
     return { ok: true, id: store.saveFile(sname, "image/jpeg", sb, "sid:" + who.id) };
   }
+  /* ---- 정답 파일 글씨 읽기 (선생님) ---- */
+  if (op === "ocr") {
+    if (who.role !== "owner" && who.role !== "teacher") return { error: "forbidden", message: "선생님만 쓸 수 있어요." };
+    var ob = String(req.b64 || ""); if (!ob) return { error: "empty", message: "파일이 비어 있어요." };
+    if (ob.length > 11 * 1024 * 1024) return { error: "too_big", message: "파일이 너무 커서 글씨를 읽지 못해요." };
+    if (!store.ocr) return { error: "no_ocr", message: "글씨 읽기를 쓸 수 없어요." };
+    try { return { ok: true, text: String(store.ocr(ob, String(req.type || "image/jpeg")) || "").slice(0, 20000) }; }
+    catch (err) { var em = String(err && err.message || err);
+      if (em.indexOf("NO_DRIVE") >= 0) return { error: "need_drive", message: "Apps Script에 'Drive API' 서비스를 추가해 주세요." };
+      return { error: "ocr_fail", message: "글씨를 읽지 못했어요: " + em.slice(0, 120) }; }
+  }
+
   /* ---- 오답 노트 (학생은 풀기만, 넣기는 선생님) ---- */
   if (op === "wrong_try") {
     if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 풀어 주세요." };
@@ -359,6 +371,15 @@ function makeStore_() {
         var b = f.getBlob(); return { type: b.getContentType(), b64: Utilities.base64Encode(b.getBytes()) };
       } catch (e) { return null; }
     },
+    ocr: function (b64, type) {
+      if (typeof Drive === "undefined") throw new Error("NO_DRIVE");
+      var blob = Utilities.newBlob(Utilities.base64Decode(b64), type, "정답읽기");
+      var id;
+      try { id = Drive.Files.create({ name: "정답읽기_임시", mimeType: "application/vnd.google-apps.document" }, blob, { ocrLanguage: "ko" }).id; }
+      catch (e3) { id = Drive.Files.insert({ title: "정답읽기_임시" }, blob, { ocr: true, ocrLanguage: "ko" }).id; }
+      try { return DocumentApp.openById(id).getBody().getText(); }
+      finally { try { DriveApp.getFileById(id).setTrashed(true); } catch (e4) {} }
+    },
     cacheGet: function (k) { var v = CacheService.getScriptCache().get(k); return v ? Number(v) : 0; },
     cachePut: function (k, v, sec) { CacheService.getScriptCache().put(k, String(v), sec); },
     sleep: function (ms) { Utilities.sleep(ms); },
@@ -390,6 +411,13 @@ function doPost(e) {
   catch (err) { return json_({ error: "server", message: "서버 오류: " + err }); }
 }
 function doGet() { return json_({ ok: true, app: "수학날개", time: new Date().toISOString() }); }
+
+/* 정답 글씨 읽기 권한 받기: 'Drive API' 서비스를 추가한 뒤 이 함수를 한 번 실행하세요 */
+function setupOcr() {
+  if (typeof Drive === "undefined") { Logger.log("왼쪽 '서비스 +' 에서 Drive API 를 먼저 추가해 주세요."); return; }
+  var d = DocumentApp.create("권한 확인용 (지워도 돼요)"); DriveApp.getFileById(d.getId()).setTrashed(true);
+  Logger.log("준비 완료! 이제 배포 → 배포 관리 → ✏️ → 새 버전 → 배포 를 눌러 주세요.");
+}
 
 /* 처음 한 번 실행: 시트와 폴더를 만들고 권한을 받습니다 */
 function setup() {

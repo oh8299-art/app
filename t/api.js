@@ -7,7 +7,7 @@
       if (!window.SN_API) return { error: "no_api", message: "서버 주소가 아직 설정되지 않았어요." };
       body = Object.assign({ code: this.code }, body);
       try {
-        const big = body.op === "upload" || body.op === "import";
+        const big = body.op === "upload" || body.op === "import" || body.op === "ocr";
         const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), big ? 150000 : 40000);
         let r; try { r = await fetch(window.SN_API, { method: "POST", body: JSON.stringify(body), signal: ctl.signal }); } finally { clearTimeout(tm); }
         const txt = await r.text();

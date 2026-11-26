@@ -3,9 +3,9 @@
 <meta name="apple-mobile-web-app-title" content="숙제체크"><link rel="apple-touch-icon" href="../icon.png"><link rel="icon" href="../icon.png">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26b">
+<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26c">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
-(function(){ var V="2026-11-26b"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+(function(){ var V="2026-11-26c"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
 setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>수학날개 숙제체크</title>
@@ -731,8 +731,11 @@ function renderWeek(){
 /* ---------- students view ---------- */
 function daysHtml(sel,attr){ return [1,2,3,4,5,6,0].map(n=>`<button type="button" ${attr}="${n}" aria-pressed="${sel.includes(n)}">${DOW[n]}</button>`).join(""); }
 const pendingFiles={}, formStatus={};
-function showPF(id){ const lab=document.getElementById("pf-"+id); if(!lab) return; const n=(pendingFiles[id]||[]).length;
-  lab.innerHTML = n ? ` ✅ ${n}개 준비됨 <button type="button" class="ghost" data-pfclear="${id}" style="margin-left:8px;padding:3px 10px;font-size:12px">✕ 고른 파일 취소</button>` : ""; }
+function showPF(id){ const lab=document.getElementById("pf-"+id); if(!lab) return; const L=pendingFiles[id]||[], n=L.length;
+  let desc=`${n}개 준비됨`;
+  if(/^wq-/.test(id)&&n){ const sid=id.slice(3), sol=(pendingFiles["ws-"+sid]||[]).length;
+    desc = sol||n===1 ? `문제 ${n}개 준비됨${n===1&&!sol?" · 정답 파일도 같이 고르면 정답을 자동으로 읽어요":""}` : `문제: ${esc(L[0].name||"파일1")} · 정답·풀이: ${L.slice(1).map(f=>esc(f.name||"파일")).join(", ")}`; }
+  lab.innerHTML = n ? ` ✅ ${desc} <button type="button" class="ghost" data-pfclear="${id}" style="margin-left:8px;padding:3px 10px;font-size:12px">✕ 고른 파일 취소</button>` : ""; }
 const fsTimers={};
 function setFS(id,text,cls){
   clearInterval(fsTimers[id]);
@@ -932,6 +935,42 @@ function renderFees(){
 }
 function fileTile(f,label){ const pdf=f.type==="application/pdf"; return pdf?`<a class="ftile" href="#" data-fopen="${esc(f.id)}">📄 <span>${esc(f.name||label||"PDF")}</span></a>`:`<a href="#" data-fopen="${esc(f.id)}" style="display:block;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)"><img data-fid="${esc(f.id)}" alt="${esc(f.name||label||"사진")}" style="width:100%;height:100%;object-fit:cover"></a>`; }
 /* ---------- 오답 노트 ---------- */
+function wrongSplit(sid){ const wq=pendingFiles["wq-"+sid]||[], ws=pendingFiles["ws-"+sid]||[];
+  if(ws.length||wq.length<2) return {q:wq,sol:ws}; return {q:wq.slice(0,1),sol:wq.slice(1)}; }
+const ocrState={};
+function guessAns(text,title){
+  const t=String(text||"").replace(/\r/g,"").replace(/[ \t]+/g," ").trim(); if(!t) return "";
+  const n=(String(title||"").match(/(\d+)\s*번/)||[])[1];
+  if(n){ const m=t.match(new RegExp(`(?:^|[\\s(\\[])${n}\\s*[.)번:]\\s*([^\\s,]+)`,"m")); if(m) return m[1]; }
+  const m2=t.match(/(?:정답|답)\s*[:：은는)]?\s*([^\n]{1,30})/); if(m2) return m2[1].trim().replace(/[.。]$/,"");
+  const one=t.split("\n").map(x=>x.trim()).filter(Boolean); if(t.length<=25&&one.length<=2) return one.join(" ");
+  return "";
+}
+async function wrongOcr(sid){
+  const f=wrongSplit(sid).sol[0];
+  const put=(h,st)=>{ if(st&&ocrState[sid]!==st) return; if(st) st.html=h; const b=$("wo-"+sid); if(b){ b.hidden=!h; b.innerHTML=h||""; } };
+  if(!f){ delete ocrState[sid]; put(""); return; }
+  const key=(f.name||"")+f.size; if(ocrState[sid]&&ocrState[sid].key===key) return;
+  const st=ocrState[sid]={key}; put("🔍 정답 파일의 글씨를 읽는 중… (10초쯤 걸려요)",st);
+  try{
+    const isPdf=f.type==="application/pdf"||/\.pdf$/i.test(f.name||"");
+    const blob=isPdf?f:await shrink(f);
+    const b64=await new Promise((ok,bad)=>{ const fr=new FileReader(); fr.onload=()=>ok(String(fr.result).split(",")[1]||""); fr.onerror=bad; fr.readAsDataURL(blob); });
+    const r=await SN.API.call({op:"ocr",type:isPdf?"application/pdf":"image/jpeg",b64});
+    if(ocrState[sid]!==st) return;
+    if(!r.ok){ put(r.error==="need_drive"||r.error==="bad_op"
+      ? `⚠ 정답 자동 읽기를 쓰려면 서버 설정이 한 번 필요해요. (원장님께 'Drive API 서비스 추가'를 부탁해 주세요) 지금은 정답을 직접 써 주세요.`
+      : `⚠ ${esc(r.message||"글씨를 읽지 못했어요")} — 정답을 직접 써 주세요.`,st); return; }
+    const text=String(r.text||"").trim();
+    if(!text){ put("글씨를 찾지 못했어요. 정답을 직접 써 주세요.",st); return; }
+    const g=guessAns(text,$("wt-"+sid).value); const ain=$("wa-"+sid);
+    if(g&&ain&&!ain.value.trim()) ain.value=g;
+    const toks=[...new Set(text.split(/[\s,]+/).map(x=>x.trim().replace(/^[(\[]+|[.)\]:：]+$/g,"")).filter(x=>x&&x.length<=20))].slice(0,60);
+    put(`${g?`✨ 정답칸에 <b>${esc(g)}</b> 를 넣었어요. 맞는지 꼭 확인해 주세요.`:"정답을 찾지 못했어요. 아래 읽은 글씨에서 정답을 눌러 넣거나 직접 써 주세요."}
+      <div style="margin-top:6px;color:var(--muted)">읽은 글씨 (누르면 정답칸에 들어가요)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;max-height:120px;overflow:auto">${toks.map(x=>`<button type="button" class="ghost" data-ocrpick="${esc(sid)}" data-v="${esc(x)}" style="padding:3px 8px;font-size:13px">${esc(x)}</button>`).join("")}</div>`,st);
+  }catch(err){ put(`⚠ 글씨를 읽지 못했어요 — 정답을 직접 써 주세요.`,st); }
+}
 function wrongPanel(s){
   const all=wrongs.filter(w=>w.sid===s.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0));
   const left=all.filter(w=>!w.cleared), done=all.filter(w=>w.cleared), list=wrongTab==="done"?done:left;
@@ -942,8 +981,9 @@ function wrongPanel(s){
       <input class="w2" id="wt-${s.id}" placeholder="문제 이름 (예: 왕수학 32쪽 5번)" aria-label="문제 이름">
       <input class="w2" id="wa-${s.id}" placeholder="정답 (꼭 써 주세요 · 주관식 채점)" aria-label="정답" autocomplete="off">
       <input class="w4" id="wm-${s.id}" placeholder="힌트 한 줄 (선택 · 문제 아래에 보여요)" aria-label="힌트">
-      <label class="file">① 문제 — 사진 또는 PDF<br><input id="wq-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-wq-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-wq-${s.id}" hidden></p>
-      <label class="file">② 풀이 과정 — 사진 또는 PDF (선택 · 학생이 답을 쓴 뒤에만 보여요)<br><input id="ws-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-ws-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-ws-${s.id}" hidden></p>
+      <label class="file">① 문제 + 정답 파일을 같이 고르세요 — 사진 또는 PDF<br><small style="font-weight:400">첫 번째 파일 = 문제, 두 번째부터 = 정답·풀이 (정답 글씨는 자동으로 읽어요)</small><br><input id="wq-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-wq-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-wq-${s.id}" hidden></p>
+      <div class="w4" id="wo-${s.id}" ${ocrState[s.id]&&ocrState[s.id].html?"":"hidden"} style="border:1px dashed var(--line);border-radius:10px;padding:8px 10px;font-size:13px">${(ocrState[s.id]&&ocrState[s.id].html)||""}</div>
+      <label class="file">② 정답·풀이 파일을 따로 고를 때만 (선택 · 학생이 답을 쓴 뒤에만 보여요)<br><input id="ws-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-ws-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-ws-${s.id}" hidden></p>
       <button class="act w4" type="submit">오답 문제 만들기</button><p class="fmsg w4" id="fs-wf-${s.id}"></p>
       <p class="hint w4" style="margin:0">한 번에 한 문제씩 만들어요. 학생은 <b>답을 써야</b> 풀이 과정을 볼 수 있고, <b>2번 맞히면</b> 오답 목록에서 사라져 클리어 목록으로 가요. 정답이 여러 형태면 <b>|</b> 로 나눠 쓰세요 (예: 1/2 | 0.5). 단위·쉼표·띄어쓰기는 달라도 맞게 쳐요.</p>
     </form>
@@ -1182,12 +1222,12 @@ $("slist").addEventListener("submit",async e=>{
   const wf=e.target.closest("[data-wform]");
   if(wf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
     const sid=wf.dataset.wform, fid="wf-"+sid; const g=k=>$(k+"-"+sid).value.trim();
-    const qs=pendingFiles["wq-"+sid]||[], ss=pendingFiles["ws-"+sid]||[];
+    const sp=wrongSplit(sid), qs=sp.q, ss=sp.sol;
     if(!qs.length) return setFS(fid,"① 문제 사진이나 PDF를 골라 주세요.","bad");
     if(!g("wa")) { $("wa-"+sid).focus(); return setFS(fid,"정답을 써 주세요. 모든 오답은 주관식이라 정답이 있어야 채점돼요.","bad"); }
     const big=[...qs,...ss].find(x=>x.size>10*1024*1024&&(x.type==="application/pdf"||/\.pdf$/i.test(x.name||""))); if(big) return setFS(fid,`${big.name} 파일이 10MB보다 커요.`,"bad");
     await UQ.add({kind:"wrong",nq:qs.length,sids:[sid],date:TODAY,title:g("wt")||"오답",answer:g("wa"),memo:g("wm"),files:[...qs,...ss],label:((students.find(x=>x.id===sid)||{}).name||"")+" 오답"});
-    delete pendingFiles["wq-"+sid]; delete pendingFiles["ws-"+sid]; showPF("wq-"+sid); showPF("ws-"+sid); ["wt","wa","wm"].forEach(k=>$(k+"-"+sid).value="");
+    delete pendingFiles["wq-"+sid]; delete pendingFiles["ws-"+sid]; showPF("wq-"+sid); showPF("ws-"+sid); ["wt","wa","wm"].forEach(k=>$(k+"-"+sid).value=""); const ob=$("wo-"+sid); if(ob){ ob.hidden=true; ob.innerHTML=""; } delete ocrState[sid];
     setFS(fid,"⬆ 오답 문제를 만들고 있어요. 아래 막대에서 진행 상황이 보여요 — 다음 문제를 바로 넣어도 돼요.","ok");
     return; }
   const mf=e.target.closest("[data-mform]");
@@ -1229,6 +1269,7 @@ $("slist").addEventListener("change",async e=>{
     pendingFiles[id]=list; fi.value="";
     showPF(id);
     if(bad) toast(`파일 ${bad}개를 읽지 못했어요. 크롬에서 다시 골라 주세요`);
+    const wm=id.match(/^w[qs]-(.+)$/); if(wm){ showPF("wq-"+wm[1]); wrongOcr(wm[1]); }
     return; }
   const cs=e.target.closest("[data-csel]");
   if(cs){ if(!db||!canWrite) return toast("보기 전용이에요"); try{ await db.collection("students").doc(cs.closest(".srow").dataset.sid).update({classId:cs.value}); toast("반을 바꿨어요"); }catch(err){ handleWriteErr(err); } return; }
@@ -1240,7 +1281,7 @@ $("slist").addEventListener("change",async e=>{ const a=e.target.closest("[data-
   try{ await db.collection("s_wrong").doc(a.dataset.wans).update({answer:a.value.trim()}); toast(a.value.trim()?"정답을 저장했어요":"정답이 비어서 학생 앱에서 이 문제는 숨겨져요"); }catch(err){ handleWriteErr(err); } });
 $("slist").addEventListener("click",async e=>{
   const pc=e.target.closest("[data-pfclear]");
-  if(pc){ const id=pc.dataset.pfclear; delete pendingFiles[id]; showPF(id); setFS(id,"",""); return; }
+  if(pc){ const id=pc.dataset.pfclear; delete pendingFiles[id]; showPF(id); setFS(id,"",""); const wm=id.match(/^w[qs]-(.+)$/); if(wm){ showPF("wq-"+wm[1]); delete ocrState[wm[1]]; wrongOcr(wm[1]); } return; }
   if(e.target.closest("[data-fdel]")){ await onFeeDel(e); return; }
   const row=e.target.closest(".srow"); if(!row) return; const sid=row.dataset.sid; const s=students.find(x=>x.id===sid);
   const dbtn=e.target.closest("[data-sd]");
@@ -1253,6 +1294,8 @@ $("slist").addEventListener("click",async e=>{
   if(eb){ openEdit = openEdit===sid?null:sid; renderStudents(); if(openEdit) setTimeout(()=>{ const i=$("en-"+sid); if(i) i.focus(); },50); return; }
   const fb=e.target.closest("[data-fees]");
   if(fb){ openFees = openFees===sid?null:sid; renderStudents(); return; }
+  const op=e.target.closest("[data-ocrpick]");
+  if(op){ const a=$("wa-"+op.dataset.ocrpick); if(a){ a.value=op.dataset.v; a.focus(); } return; }
   const wb=e.target.closest("[data-wrong]");
   if(wb){ openWrong = openWrong===sid?null:sid; renderStudents(); return; }
   const wt=e.target.closest("[data-wtab]");
