@@ -3,9 +3,9 @@
 <meta name="apple-mobile-web-app-title" content="숙제체크"><link rel="apple-touch-icon" href="../icon.png"><link rel="icon" href="../icon.png">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26a">
+<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26b">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
-(function(){ var V="2026-11-26a"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+(function(){ var V="2026-11-26b"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
 setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>수학날개 숙제체크</title>
@@ -769,7 +769,7 @@ const UQ=(()=>{
     if(running&&!tick) tick=setInterval(()=>{ if(running) bar(); },1000);
   }
   async function add(o){
-    const j={id:"j"+Date.now()+Math.random().toString(36).slice(2,6),kind:o.kind||"materials",answer:o.answer||"",sids:o.sids,date:o.date,title:o.title,memo:o.memo||"",label:o.label||o.title,by:me||"",files:o.files.slice(),done:o.files.map(()=>null),createdAt:Date.now()};
+    const j={id:"j"+Date.now()+Math.random().toString(36).slice(2,6),kind:o.kind||"materials",answer:o.answer||"",nq:o.nq||0,sids:o.sids,date:o.date,title:o.title,memo:o.memo||"",label:o.label||o.title,by:me||"",files:o.files.slice(),done:o.files.map(()=>null),createdAt:Date.now()};
     jobs.push(j); await save(j); run(); }
   async function upOne(j,i){
     const x=j.files[i]; const isPdf=x.type==="application/pdf"||/\.pdf$/i.test(x.name||"");
@@ -790,7 +790,8 @@ const UQ=(()=>{
         await Promise.all([worker(),worker(),worker()]);
         const now=Date.now();
         if(j.kind==="wrong"){
-          const items=[]; j.sids.forEach(sid=>j.done.forEach((f,i)=>{ const d={sid,date:j.date,title:j.title+(j.done.length>1?` (${i+1})`:""),answer:j.done.length>1?"":j.answer,memo:j.memo,photo:f.id,clears:0,cleared:false,tries:0,createdAt:now+i}; if(j.by) d.by=j.by; items.push(d); }));
+          const nq=j.nq||j.done.length, q=j.done.slice(0,nq), sol=j.done.slice(nq);
+          const items=j.sids.map((sid,i)=>{ const d={sid,date:j.date,title:j.title,answer:j.answer,memo:j.memo,q,sol,clears:0,cleared:false,tries:0,createdAt:now+i}; if(j.by) d.by=j.by; return d; });
           await db.collection("s_wrong").addMany(items);
         } else {
         const items=j.sids.map(sid=>{ const d={sid,date:j.date,title:j.title,memo:j.memo,files:j.done,createdAt:now}; if(j.by) d.by=j.by; return d; });
@@ -934,22 +935,24 @@ function fileTile(f,label){ const pdf=f.type==="application/pdf"; return pdf?`<a
 function wrongPanel(s){
   const all=wrongs.filter(w=>w.sid===s.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0));
   const left=all.filter(w=>!w.cleared), done=all.filter(w=>w.cleared), list=wrongTab==="done"?done:left;
-  const dots=w=>{ const n=Math.min(2,w.clears||0); return `<span style="letter-spacing:2px;color:var(--s-done)">${"⭕".repeat(n)}<span style="opacity:.25">${"⭕".repeat(2-n)}</span></span>`; };
+  const dots=w=>{ const n=Math.min(2,w.clears||0); return `<span style="letter-spacing:2px">${"⭕".repeat(n)}<span style="opacity:.25">${"⭕".repeat(2-n)}</span></span>`; };
+  const qf=w=>(w.q&&w.q.length?w.q:(w.photo?[{id:w.photo,type:"image/jpeg"}]:[]));
   return `<div class="tpanel">
     <form class="tform" data-wform="${s.id}" novalidate>
-      <input class="w2" id="wt-${s.id}" placeholder="문제 (예: 왕수학 32쪽 5번)" aria-label="문제 이름">
-      <input class="w2" id="wa-${s.id}" placeholder="정답 (선택 · 쓰면 자동 채점)" aria-label="정답" autocomplete="off">
-      <input class="w4" id="wm-${s.id}" placeholder="힌트 한 줄 (선택 · 학생에게 보여요)" aria-label="힌트">
-      <label class="file">📷 틀린 문제 사진 (여러 장이면 한 장이 한 문제)<br><input id="wf-${s.id}" type="file" accept="image/*" multiple ${assetsApi?"":"disabled"}></label><b id="pf-wf-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b>
-      <button class="act w4" type="submit">오답 넣기</button><p class="fmsg w4" id="fs-wf-${s.id}"></p>
-      <p class="hint w4" style="margin:0">정답을 쓰면 학생이 답을 입력해서 자동으로 채점돼요. 비워 두면 학생이 스스로 ⭕/❌를 눌러요. 정답이 여러 개면 <b>|</b> 로 나눠 쓰세요 (예: 1/2 | 0.5). <b>다른 날 2번</b> 맞히면 클리어돼요.</p>
+      <input class="w2" id="wt-${s.id}" placeholder="문제 이름 (예: 왕수학 32쪽 5번)" aria-label="문제 이름">
+      <input class="w2" id="wa-${s.id}" placeholder="정답 (꼭 써 주세요 · 주관식 채점)" aria-label="정답" autocomplete="off">
+      <input class="w4" id="wm-${s.id}" placeholder="힌트 한 줄 (선택 · 문제 아래에 보여요)" aria-label="힌트">
+      <label class="file">① 문제 — 사진 또는 PDF<br><input id="wq-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-wq-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-wq-${s.id}" hidden></p>
+      <label class="file">② 풀이 과정 — 사진 또는 PDF (선택 · 학생이 답을 쓴 뒤에만 보여요)<br><input id="ws-${s.id}" type="file" accept="image/*,application/pdf" multiple ${assetsApi?"":"disabled"}></label><b id="pf-ws-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b><p class="fmsg w4" id="fs-ws-${s.id}" hidden></p>
+      <button class="act w4" type="submit">오답 문제 만들기</button><p class="fmsg w4" id="fs-wf-${s.id}"></p>
+      <p class="hint w4" style="margin:0">한 번에 한 문제씩 만들어요. 학생은 <b>답을 써야</b> 풀이 과정을 볼 수 있고, <b>2번 맞히면</b> 오답 목록에서 사라져 클리어 목록으로 가요. 정답이 여러 형태면 <b>|</b> 로 나눠 쓰세요 (예: 1/2 | 0.5). 단위·쉼표·띄어쓰기는 달라도 맞게 쳐요.</p>
     </form>
     <div class="seg" style="margin:6px 0"><button type="button" data-wtab="left" aria-pressed="${wrongTab!=="done"}">남은 오답 ${left.length}</button><button type="button" data-wtab="done" aria-pressed="${wrongTab==="done"}">클리어 ${done.length}</button></div>
-    ${list.length?list.map(w=>`<div class="titem"><div>${esc(w.title||"오답")} <small>${esc((w.date||"").slice(5).replace("-","/"))}${w.by==="student"?" · 학생이 올림":""}${w.tries?` · ${w.tries}번 도전`:""}${w.cleared?` · ${esc((w.clearedAt||"").slice(5).replace("-","/"))} 클리어`:""}</small>
-        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap">${dots(w)}<input data-wans="${w.id}" value="${esc(w.answer||"")}" placeholder="정답 (선택)" style="max-width:150px;padding:5px 8px;font-size:13px" aria-label="정답"></div></div>
+    ${list.length?list.map(w=>`<div class="titem"><div>${esc(w.title||"오답")} <small>${esc((w.date||"").slice(5).replace("-","/"))}${w.tries?` · ${w.tries}번 풀이${w.lastAns?` (마지막 답: ${esc(w.lastAns)})`:""}`:""}${w.cleared?` · ${esc((w.clearedAt||"").slice(5).replace("-","/"))} 클리어`:""}</small>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap">${dots(w)}<label style="font-size:12px;color:var(--muted)">정답 <input data-wans="${w.id}" value="${esc(w.answer||"")}" placeholder="정답을 써 주세요" style="max-width:150px;padding:5px 8px;font-size:13px;${String(w.answer||"").trim()?"":"border-color:var(--s-none,#e5484d)"}" aria-label="정답"></label>${String(w.answer||"").trim()?"":`<small style="color:#e5484d">정답이 없으면 학생에게 안 보여요</small>`}</div></div>
       <span></span><span style="display:flex;gap:4px;flex-direction:column">${w.cleared||w.clears?`<button class="ghost" data-wreset="${w.id}" style="font-size:12px;padding:4px 8px">다시 풀기</button>`:""}<button class="danger" data-wdel="${w.id}">삭제</button></span>
-      <div class="thumbs">${fileTile({id:w.photo,type:"image/jpeg"},w.title)}</div></div>`).join("")
-      :`<p class="hint">${wrongTab==="done"?"아직 클리어한 오답이 없어요.":"남은 오답이 없어요. 틀린 문제 사진을 넣으면 학생 앱 '오답 노트'에서 퀴즈처럼 다시 풀어요."}</p>`}
+      <div class="thumbs">${qf(w).map(f=>fileTile({id:f.id,type:f.type||f.t},"문제")).join("")}${(w.sol||[]).length?`<small style="align-self:center;color:var(--muted)">풀이 →</small>`+w.sol.map(f=>fileTile({id:f.id,type:f.type||f.t},"풀이")).join(""):""}</div></div>`).join("")
+      :`<p class="hint">${wrongTab==="done"?"아직 클리어한 오답이 없어요.":"남은 오답이 없어요. 틀린 문제를 넣으면 학생 앱 '오답 노트'에서 한 문제씩 다시 풀어요."}</p>`}
   </div>`;
 }
 function matPanel(s){
@@ -1179,11 +1182,13 @@ $("slist").addEventListener("submit",async e=>{
   const wf=e.target.closest("[data-wform]");
   if(wf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
     const sid=wf.dataset.wform, fid="wf-"+sid; const g=k=>$(k+"-"+sid).value.trim();
-    const files=(pendingFiles[fid]||[]).filter(x=>!(x.type==="application/pdf"||/\.pdf$/i.test(x.name||"")));
-    if(!files.length) return setFS(fid,"틀린 문제 사진을 골라 주세요. (PDF는 안 돼요)","bad");
-    await UQ.add({kind:"wrong",sids:[sid],date:TODAY,title:g("wt")||"오답",answer:g("wa"),memo:g("wm"),files,label:((students.find(x=>x.id===sid)||{}).name||"")+" 오답"});
-    delete pendingFiles[fid]; showPF(fid); ["wt","wa","wm"].forEach(k=>$(k+"-"+sid).value="");
-    setFS(fid,`⬆ 오답 ${files.length}문제를 넣고 있어요. 아래 막대에서 진행 상황이 보여요.`,"ok");
+    const qs=pendingFiles["wq-"+sid]||[], ss=pendingFiles["ws-"+sid]||[];
+    if(!qs.length) return setFS(fid,"① 문제 사진이나 PDF를 골라 주세요.","bad");
+    if(!g("wa")) { $("wa-"+sid).focus(); return setFS(fid,"정답을 써 주세요. 모든 오답은 주관식이라 정답이 있어야 채점돼요.","bad"); }
+    const big=[...qs,...ss].find(x=>x.size>10*1024*1024&&(x.type==="application/pdf"||/\.pdf$/i.test(x.name||""))); if(big) return setFS(fid,`${big.name} 파일이 10MB보다 커요.`,"bad");
+    await UQ.add({kind:"wrong",nq:qs.length,sids:[sid],date:TODAY,title:g("wt")||"오답",answer:g("wa"),memo:g("wm"),files:[...qs,...ss],label:((students.find(x=>x.id===sid)||{}).name||"")+" 오답"});
+    delete pendingFiles["wq-"+sid]; delete pendingFiles["ws-"+sid]; showPF("wq-"+sid); showPF("ws-"+sid); ["wt","wa","wm"].forEach(k=>$(k+"-"+sid).value="");
+    setFS(fid,"⬆ 오답 문제를 만들고 있어요. 아래 막대에서 진행 상황이 보여요 — 다음 문제를 바로 넣어도 돼요.","ok");
     return; }
   const mf=e.target.closest("[data-mform]");
   if(mf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
@@ -1232,7 +1237,7 @@ $("slist").addEventListener("change",async e=>{
   try{ await db.collection("students").doc(sid).update({teacherId: sel.value==="none"?"":sel.value}); toast("담당 선생님을 바꿨어요"); }catch(err){ handleWriteErr(err); }
 });
 $("slist").addEventListener("change",async e=>{ const a=e.target.closest("[data-wans]"); if(!a) return; if(!db||!canWrite) return toast("보기 전용이에요");
-  try{ await db.collection("s_wrong").doc(a.dataset.wans).update({answer:a.value.trim()}); toast(a.value.trim()?"정답을 저장했어요":"정답을 지웠어요 · 학생이 스스로 채점해요"); }catch(err){ handleWriteErr(err); } });
+  try{ await db.collection("s_wrong").doc(a.dataset.wans).update({answer:a.value.trim()}); toast(a.value.trim()?"정답을 저장했어요":"정답이 비어서 학생 앱에서 이 문제는 숨겨져요"); }catch(err){ handleWriteErr(err); } });
 $("slist").addEventListener("click",async e=>{
   const pc=e.target.closest("[data-pfclear]");
   if(pc){ const id=pc.dataset.pfclear; delete pendingFiles[id]; showPF(id); setFS(id,"",""); return; }

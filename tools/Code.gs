@@ -76,35 +76,21 @@ function handle(store, req) {
     var sname = (who.name || "학생") + "_숙제_" + kstDay_(0) + ".jpg";
     return { ok: true, id: store.saveFile(sname, "image/jpeg", sb, "sid:" + who.id) };
   }
-  /* ---- 오답 노트 (학생) ---- */
-  if (op === "wrong_add") {
-    if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 올려 주세요." };
-    var wb = String(req.b64 || "");
-    if (!wb) return { error: "empty", message: "사진이 비어 있어요." };
-    if (wb.length > 5 * 1024 * 1024) return { error: "too_big", message: "사진이 너무 커요." };
-    var wfid = store.saveFile((who.name || "학생") + "_오답_" + kstDay_(0) + ".jpg", "image/jpeg", wb, "sid:" + who.id);
-    return store.withLock(function () {
-      var wd = { sid: who.id, date: kstDay_(0), title: String(req.title || "").slice(0, 80) || "내가 찍은 오답", photo: wfid, answer: "", memo: "",
-        clears: 0, cleared: false, tries: 0, by: "student", createdAt: Date.now(), updatedAt: Date.now() };
-      var wid = newId_(); store.put("s_wrong", wid, wd); var o = wrongOut_(wd); o.id = wid; return { ok: true, item: o };
-    });
-  }
+  /* ---- 오답 노트 (학생은 풀기만, 넣기는 선생님) ---- */
   if (op === "wrong_try") {
     if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 풀어 주세요." };
+    var tans = String(req.ans == null ? "" : req.ans).trim();
+    if (!tans) return { error: "empty", message: "답을 먼저 써 주세요." };
     return store.withLock(function () {
       var all = store.getAll("s_wrong"), id = String(req.id || ""), d = all[id];
       if (!d || d.sid !== who.id) return { error: "not_found", message: "오답을 찾을 수 없어요." };
-      var today = kstDay_(0), hasAns = !!String(d.answer || "").trim(), ok;
-      if (req.giveup) ok = false;
-      else if (hasAns) ok = ansMatch_(req.ans, d.answer);
-      else ok = !!req.self;
-      d.tries = (d.tries || 0) + 1; d.lastTry = today;
-      var counted = false;
-      if (ok) { if (d.lastOk !== today && !d.cleared) { d.clears = (d.clears || 0) + 1; d.lastOk = today; counted = true; } if ((d.clears || 0) >= WRONG_CLEAR_N && !d.cleared) { d.cleared = true; d.clearedAt = today; } }
-      else if (!d.cleared) { d.clears = 0; d.misses = (d.misses || 0) + 1; d.lastOk = ""; }
+      var ok = ansMatch_(tans, d.answer || ""), today = kstDay_(0), was = !!d.cleared;
+      d.tries = (d.tries || 0) + 1; d.lastTry = today; d.lastAns = tans.slice(0, 60);
+      if (ok) { if (!d.cleared) { d.clears = (d.clears || 0) + 1; if (d.clears >= WRONG_CLEAR_N) { d.cleared = true; d.clearedAt = today; } } }
+      else d.misses = (d.misses || 0) + 1;
       d.updatedAt = Date.now(); store.put("s_wrong", id, d);
       var o = wrongOut_(d); o.id = id;
-      return { ok: true, correct: ok, counted: counted, answer: hasAns ? String(d.answer) : "", item: o };
+      return { ok: true, correct: ok, nowCleared: !was && !!d.cleared, answer: String(d.answer || ""), sol: wrongFiles_(d.sol), item: o };
     });
   }
 
@@ -213,9 +199,11 @@ function handle(store, req) {
   return { error: "bad_op", message: "알 수 없는 요청이에요." };
 }
 
-var WRONG_CLEAR_N = 2; // 다른 날 2번 맞히면 클리어
-function wrongOut_(d) { return { id: d.id, date: d.date, title: d.title || "", memo: d.memo || "", photo: d.photo, hasAns: !!String(d.answer || "").trim(),
-  clears: d.clears || 0, need: WRONG_CLEAR_N, cleared: !!d.cleared, clearedAt: d.clearedAt || "", lastOk: d.lastOk || "", tries: d.tries || 0, mine: d.by === "student" }; }
+var WRONG_CLEAR_N = 2; // 2번 맞히면 클리어(오답 목록에서 사라짐)
+function wrongFiles_(x) { return (x || []).map(function (f) { return typeof f === "string" ? { id: f, t: "image/jpeg" } : { id: f.id, t: f.type || f.t || "image/jpeg", n: f.name || f.n || "" }; }); }
+function wrongQ_(d) { var q = wrongFiles_(d.q); if (!q.length && d.photo) q = [{ id: d.photo, t: "image/jpeg" }]; return q; }
+function wrongOut_(d) { return { id: d.id, date: d.date, title: d.title || "", memo: d.memo || "", q: wrongQ_(d), hasSol: !!(d.sol && d.sol.length),
+  clears: d.clears || 0, need: WRONG_CLEAR_N, cleared: !!d.cleared, clearedAt: d.clearedAt || "", tries: d.tries || 0 }; }
 function normAns_(x) { return String(x == null ? "" : x).replace(/[\uFF01-\uFF5E]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
   .replace(/\s+/g, "").replace(/[.,]$/,"").replace(/(번|개|cm|mm|m|km|kg|g|L|mL|원|명|장|쪽|살|시간|분|초|도|°)$/i, "").toLowerCase(); }
 function ansMatch_(got, ans) { var g = normAns_(got); if (!g) return false;
@@ -223,7 +211,9 @@ function ansMatch_(got, ans) { var g = normAns_(got); if (!g) return false;
     var x = Number(n.replace(/,/g, "")), y = Number(g.replace(/,/g, "")); return !isNaN(x) && !isNaN(y) && Math.abs(x - y) < 1e-9; }); }
 function studentOwnsFile_(store, sid, fid) {
   if (store.fileDesc && store.fileDesc(fid) === "sid:" + sid) return true;
-  var w = store.getAll("s_wrong"); for (var c in w) if (w[c].sid === sid && w[c].photo === fid) return true;
+  var w = store.getAll("s_wrong"); for (var c in w) { var x = w[c]; if (x.sid !== sid) continue;
+    if (wrongQ_(x).some(function (f) { return f.id === fid; })) return true;
+    if ((x.tries || 0) > 0 && wrongFiles_(x.sol).some(function (f) { return f.id === fid; })) return true; } // 풀이는 답을 한 번 쓴 뒤에만
   var t = store.getAll("tests"), m = store.getAll("materials");
   for (var a in t) if (t[a].sid === sid && (t[a].photos || []).indexOf(fid) >= 0) return true;
   for (var b in m) if (m[b].sid === sid) { var fs = m[b].files || []; for (var i = 0; i < fs.length; i++) if (fs[i] && fs[i].id === fid) return true; }
@@ -270,7 +260,7 @@ function studentPayload_(store, sid) {
   allCols_(store).forEach(function (c) { if (c.indexOf("s_") !== 0 || c === "s_wrong") return;
     extra[c] = asList_(store.getAll(c)).filter(function (d) { return d.sid === sid; }).sort(byDate).slice(0, 100)
       .map(function (d) { var o = {}; for (var k in d) if (k !== "by" && k !== "sid") o[k] = d[k]; return o; }); });
-  var wrong = asList_(store.getAll("s_wrong")).filter(function (d) { return d.sid === sid && d.photo; }).sort(byDate).slice(0, 800).map(wrongOut_);
+  var wrong = asList_(store.getAll("s_wrong")).filter(function (d) { return d.sid === sid && wrongQ_(d).length && String(d.answer || "").trim(); }).sort(byDate).slice(0, 800).map(wrongOut_);
   var t = kstNow_().toISOString();
   return { month: month, week: week, updated: t.slice(0, 10) + " " + t.slice(11, 16), top: M.top, topWeek: W.top,
     me: { name: s.name || "", grade: s.grade || "", className: className(s.classId), points: m.points, done: m.done, rank: m.rank,

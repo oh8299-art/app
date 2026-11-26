@@ -3,9 +3,9 @@
 <meta name="apple-mobile-web-app-title" content="수학날개"><link rel="apple-touch-icon" href="icon.png"><link rel="icon" href="icon.png"><link rel="manifest" href="manifest.json">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="config.js"></script><meta name="sn-ver" content="2026-11-26a">
+<script src="config.js"></script><meta name="sn-ver" content="2026-11-26b">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
-(function(){ var V="2026-11-26a"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+(function(){ var V="2026-11-26b"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
 setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>나의 수학날개</title>
@@ -189,6 +189,7 @@ section{display:flex;flex-direction:column;gap:10px}
 .wqb .qt{font-size:18px;font-weight:800}.wqb .qm{font-size:14px;color:var(--muted)}
 .wqb .qimg{background:#fff;border:1px solid var(--line);border-radius:12px;min-height:160px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .wqb .qimg img{width:100%;height:auto;display:block}
+.wqb .qimg[hidden]{display:none}.wqb .qimg>div{width:100%}
 .wqb .qrow{display:flex;gap:8px}
 .wqb input{flex:1;min-width:0;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:12px;font:700 20px var(--f-body);text-align:center}
 .wqb .qbtn{border:0;border-radius:12px;padding:14px 16px;font:800 16px var(--f-body);cursor:pointer;background:var(--accent);color:var(--accent-ink)}
@@ -237,12 +238,9 @@ footer{display:flex;justify-content:space-between;align-items:center;gap:8px;fle
       <section><h2>숙제 안내</h2><div class="nlist" id="notices"></div></section>
       <section id="wSec"><div class="shead"><h2>📒 나의 오답 노트</h2><span class="sub" id="wCnt"></span></div>
         <div class="wbox">
-          <div class="wstat"><div><b id="wLeft">0</b><small>남은 오답</small></div><div><b id="wToday">0</b><small>오늘 풀 문제</small></div><div><b id="wDone">0</b><small>클리어 🏆</small></div></div>
+          <div class="wstat"><div><b id="wLeft">0</b><small>남은 오답</small></div><div><b id="wHalf">0</b><small>한 번 맞힘</small></div><div><b id="wDone">0</b><small>클리어 🏆</small></div></div>
           <button type="button" class="wgo" id="wStart">오답 퀴즈 시작 ▶</button>
-          <div style="display:flex;flex-direction:column;gap:6px"><input id="wTitle" placeholder="내가 넣을 오답 이름 (예: 왕수학 32쪽 5번)" aria-label="오답 이름" style="border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:10px 12px;font:15px var(--f-body)">
-          <label class="wadd">📷 내 오답 찍어서 넣기<input type="file" id="wFile" accept="image/*"></label></div>
-          <p class="wmsg" id="wMsg" role="status"></p>
-          <p class="whelp">틀린 문제를 <b>다른 날 2번</b> 맞히면 클리어 목록으로 옮겨져요. 틀리면 처음부터 다시!</p>
+          <p class="whelp">선생님이 넣어 준 오답을 한 문제씩 다시 풀어요. 답을 써야 풀이 과정이 보이고, <b>2번 맞히면</b> 오답 목록에서 사라져 🏆 클리어 목록으로 가요.</p>
         </div>
         <div class="wtabs" role="tablist"><button type="button" data-wt="left" aria-pressed="true">남은 오답</button><button type="button" data-wt="done" aria-pressed="false">🏆 클리어 목록</button></div>
         <div class="card" id="wList"></div>
@@ -419,74 +417,71 @@ function renderMain(p){
 let HW=[], upKind="hw", upList=[];
 const kday=n=>{ const d=new Date(Date.now()+9*3600e3+n*864e5); return d.toISOString().slice(0,10); };
 
-/* ---------- 나의 오답 노트 ---------- */
+/* ---------- 나의 오답 노트 (선생님이 넣은 주관식 오답) ---------- */
 let WR=[], wTab="left", WQ=null;
-const TODAYK=()=>{ const d=new Date(Date.now()+9*3600e3); return d.toISOString().slice(0,10); };
-const wDots=w=>{ const n=Math.min(w.need||2,w.clears||0); return `<span class="wdots" aria-label="${n}번 맞힘">${"⭕".repeat(n)}<i>${"⭕".repeat((w.need||2)-n)}</i></span>`; };
-const wTodayList=()=>WR.filter(w=>!w.cleared&&w.lastOk!==TODAYK()).sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:(a.id<b.id?-1:1)));
+const wDots=w=>{ const need=w.need||2, n=Math.min(need,w.clears||0); return `<span class="wdots" aria-label="${n}번 맞힘">${"⭕".repeat(n)}<i>${"⭕".repeat(need-n)}</i></span>`; };
+const wLeftList=()=>WR.filter(w=>!w.cleared).sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:(a.id<b.id?-1:1)));
 function renderWrong(p){
-  WR=(p&&p.wrong)||WR||[];
-  const left=WR.filter(w=>!w.cleared), done=WR.filter(w=>w.cleared), today=wTodayList();
-  $("wLeft").textContent=left.length; $("wDone").textContent=done.length; $("wToday").textContent=today.length;
-  $("wStart").disabled=!today.length;
-  $("wStart").textContent = today.length ? `오답 퀴즈 시작 ▶ (${today.length}문제)` : left.length ? "오늘 풀 오답을 다 풀었어요 👍 내일 또 만나요" : "오답이 생기면 여기서 다시 풀어요";
+  if(p) WR=p.wrong||[];
+  const left=wLeftList(), done=WR.filter(w=>w.cleared);
+  $("wSec").hidden=!WR.length;
+  $("wLeft").textContent=left.length; $("wDone").textContent=done.length; $("wHalf").textContent=left.filter(w=>w.clears>0).length;
+  $("wStart").disabled=!left.length;
+  $("wStart").textContent = left.length ? `오답 ${left.length}문제 차례로 풀기 ▶` : "남은 오답이 없어요 👏";
   document.querySelectorAll("[data-wt]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.wt===wTab));
-  const list=(wTab==="done"?done:left).slice().sort((a,b)=>wTab==="done"?((a.clearedAt||"")<(b.clearedAt||"")?1:-1):(a.date<b.date?1:-1));
-  $("wList").innerHTML = list.length ? list.map(w=>{ const d=fmtD(w.date); const okToday=w.lastOk===TODAYK()&&!w.cleared;
-      return `<button type="button" class="witem" data-wid="${esc(w.id)}"><span class="wt"><b>${esc(w.title||"오답")}</b><small>${d.md}(${d.dow})${w.mine?" · 내가 넣음":""}${w.cleared?` · ${esc((w.clearedAt||"").slice(5).replace("-","/"))} 클리어 🏆`:okToday?" · 오늘 맞힘! 내일 한 번 더":w.tries?` · ${w.tries}번 도전`:""}</small></span>${wDots(w)}</button>`; }).join("")
-    : `<div class="empty">${wTab==="done"?"아직 클리어한 오답이 없어요.<br>오답을 다른 날 2번 맞히면 여기로 와요 🏆":"남은 오답이 없어요! 👏<br>틀린 문제를 사진으로 넣어 두면 여기서 다시 풀 수 있어요."}</div>`;
+  const list=wTab==="done"?done.slice().sort((a,b)=>(a.clearedAt||"")<(b.clearedAt||"")?1:-1):left;
+  $("wList").innerHTML = list.length ? list.map(w=>{ const d=fmtD(w.date);
+      return `<button type="button" class="witem" data-wid="${esc(w.id)}"><span class="wt"><b>${esc(w.title||"오답")}</b><small>${d.md}(${d.dow})${w.cleared?` · ${esc((w.clearedAt||"").slice(5).replace("-","/"))} 클리어 🏆`:w.clears?" · 한 번 더 맞히면 클리어!":w.tries?` · ${w.tries}번 풀어 봄`:" · 아직 안 풀었어요"}</small></span>${wDots(w)}</button>`; }).join("")
+    : `<div class="empty">${wTab==="done"?"아직 클리어한 오답이 없어요.<br>오답을 2번 맞히면 여기로 와요 🏆":"남은 오답이 없어요! 👏"}</div>`;
 }
 document.addEventListener("click",e=>{ const t=e.target.closest("[data-wt]"); if(t){ wTab=t.dataset.wt; renderWrong(null); return; }
   const it=e.target.closest(".witem[data-wid]"); if(it){ const w=WR.find(x=>x.id===it.dataset.wid); if(w) openQuiz([w]); } });
-$("wStart").onclick=()=>{ const l=wTodayList(); if(l.length) openQuiz(l); };
+$("wStart").onclick=()=>{ const l=wLeftList(); if(l.length) openQuiz(l); };
 $("wqClose").onclick=()=>closeQuiz();
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!$("wq").hidden) closeQuiz(); });
 function openQuiz(list){ WQ={list:list.slice(),i:0,ok:0,cleared:0}; $("wq").hidden=false; document.body.style.overflow="hidden"; quizStep(); }
 function closeQuiz(){ $("wq").hidden=true; document.body.style.overflow=""; WQ=null; renderWrong(null); }
-async function quizStep(){
+async function showFiles(box,files,label){
+  box.innerHTML=`<p class="sub">${label} 불러오는 중…</p>`;
+  const parts=[];
+  for(const f of files){ try{ const u=await photoUrl({id:f.id,t:f.t}); 
+      if(f.t==="application/pdf"){ const d=document.createElement("div"); await renderPdf(u,d); parts.push(d); }
+      else { const im=new Image(); im.src=u; im.alt=label; parts.push(im); } }
+    catch(e){ const pp=document.createElement("p"); pp.className="sub"; pp.textContent=`${label}을 불러오지 못했어요. 인터넷을 확인해 주세요.`; parts.push(pp); } }
+  box.innerHTML=""; parts.forEach(x=>box.appendChild(x));
+}
+function quizStep(){
   const q=WQ; if(!q) return;
   if(q.i>=q.list.length){
-    $("wqTitle").textContent="오답 퀴즈 끝!";
-    $("wqBody").innerHTML=`<div class="res ok"><big>🎉</big>${q.list.length}문제 중 ${q.ok}문제 맞혔어요!${q.cleared?`<div class="ans">🏆 오늘 클리어한 오답 ${q.cleared}개</div>`:""}</div>
-      <p class="qm" style="text-align:center">맞힌 문제는 <b>다른 날 한 번 더</b> 맞히면 클리어돼요. 틀린 문제는 처음부터 다시 도전!</p>
+    $("wqTitle").textContent="오답 풀기 끝!";
+    $("wqBody").innerHTML=`<div class="res ok"><big>🎉</big>${q.list.length}문제 중 ${q.ok}문제 맞혔어요!${q.cleared?`<div class="ans">🏆 클리어한 오답 ${q.cleared}개 — 목록에서 사라졌어요</div>`:""}</div>
+      <p class="qm" style="text-align:center">한 번 맞힌 문제는 <b>한 번 더</b> 맞히면 클리어돼요.</p>
       <button type="button" class="qbtn" id="wqEnd">오답 노트로 돌아가기</button>`;
     $("wqEnd").onclick=closeQuiz; return; }
   const w=q.list[q.i];
-  $("wqTitle").textContent=q.list.length>1?`오답 퀴즈 ${q.i+1} / ${q.list.length}`:"오답 다시 풀기";
+  $("wqTitle").textContent=q.list.length>1?`오답 ${q.i+1} / ${q.list.length}`:"오답 다시 풀기";
   $("wqBody").innerHTML=`<div class="qt">${esc(w.title||"오답")} ${wDots(w)}</div>${w.memo?`<div class="qm">💡 ${esc(w.memo)}</div>`:""}
-    <div class="qimg" id="wqImg"><p class="sub">문제 불러오는 중…</p></div>
-    <p class="qm">공책에 다시 풀어 보고 ${w.hasAns?"답을 써서 확인해요.":"답지나 선생님께 확인하고 맞았는지 솔직하게 눌러요."}</p>
+    <div class="qimg" id="wqImg" style="flex-direction:column"></div>
+    <p class="qm">공책에 풀고 답을 써요. ${w.hasSol?"답을 쓰면 풀이 과정을 볼 수 있어요.":""}</p>
     ${w.cleared?`<p class="qm">이미 클리어한 문제예요. 연습으로 풀어 봐요!</p>`:""}
-    ${w.hasAns?`<div class="qrow"><input id="wqAns" inputmode="text" autocomplete="off" placeholder="답 쓰기" aria-label="답"><button type="button" class="qbtn" id="wqCheck">확인</button></div>
-      <button type="button" class="qbtn ghost" id="wqGive">모르겠어요 (정답 보기)</button>`
-     :`<div class="qbtns"><button type="button" class="qbtn ok" data-self="1">⭕ 맞았어요</button><button type="button" class="qbtn no" data-self="0">❌ 틀렸어요</button></div>`}
-    <div id="wqRes"></div>`;
-  photoUrl({id:w.photo,t:"image/jpeg"}).then(u=>{ const b=$("wqImg"); if(b&&WQ&&WQ.list[WQ.i]===w) b.innerHTML=`<img src="${u}" alt="${esc(w.title||"오답")} 문제 사진">`; })
-    .catch(()=>{ const b=$("wqImg"); if(b) b.innerHTML=`<p class="sub">사진을 불러오지 못했어요. 인터넷을 확인해 주세요.</p>`; });
-  const nx=q.list[q.i+1]; if(nx) photoUrl({id:nx.photo,t:"image/jpeg"}).catch(()=>{});
-  const send=async body=>{ document.querySelectorAll("#wqBody .qbtn,#wqAns").forEach(x=>x.disabled=true);
-    const r=await api(Object.assign({op:"wrong_try",code:CODE,id:w.id},body));
-    if(!r.ok){ $("wqRes").innerHTML=`<p class="qm">${esc(r.message||"저장하지 못했어요")} — 다시 눌러 주세요.</p>`; document.querySelectorAll("#wqBody .qbtn,#wqAns").forEach(x=>x.disabled=false); return; }
+    <div class="qrow"><input id="wqAns" inputmode="text" autocomplete="off" placeholder="답 쓰기" aria-label="답"><button type="button" class="qbtn" id="wqCheck">확인</button></div>
+    <div id="wqRes"></div><div class="qimg" id="wqSol" hidden style="flex-direction:column"></div><div id="wqNx"></div>`;
+  showFiles($("wqImg"),w.q||[],"문제");
+  const nx=q.list[q.i+1]; if(nx) (nx.q||[]).forEach(f=>photoUrl({id:f.id,t:f.t}).catch(()=>{}));
+  const go=async()=>{ const v=$("wqAns").value.trim(); if(!v){ $("wqAns").focus(); $("wqRes").innerHTML=`<p class="qm">답을 먼저 써 주세요.</p>`; return; }
+    $("wqCheck").disabled=true; $("wqAns").disabled=true; $("wqRes").innerHTML=`<p class="qm">채점하는 중…</p>`;
+    const r=await api({op:"wrong_try",code:CODE,id:w.id,ans:v});
+    if(!r.ok){ $("wqRes").innerHTML=`<p class="qm">${esc(r.message||"채점하지 못했어요")} — 다시 눌러 주세요.</p>`; $("wqCheck").disabled=false; $("wqAns").disabled=false; return; }
     const k=WR.findIndex(x=>x.id===w.id); if(k>=0) WR[k]=r.item;
-    if(r.correct) q.ok++; if(r.item.cleared&&!w.cleared) q.cleared++;
-    const msg=r.correct ? (r.item.cleared&&!w.cleared?`<big>🏆</big>클리어! 이 오답은 이제 클리어 목록으로 가요`:r.counted?`<big>⭕</big>정답! ${r.item.clears}/${r.item.need} — 다른 날 한 번 더 맞히면 클리어`:`<big>⭕</big>정답! ${w.cleared?"":"(오늘은 이미 맞혀서 내일 다시 세어요)"}`)
-      : `<big>❌</big>${body.giveup?"괜찮아요, 정답을 보고 다시 풀어 봐요":"아쉬워요! 다음에 다시 도전"}${w.cleared?"":" · 맞힌 횟수가 0으로 돌아가요"}`;
-    $("wqRes").innerHTML=`<div class="res ${r.correct?"ok":"no"}">${msg}${r.answer&&(!r.correct||body.giveup)?`<div class="ans">정답: ${esc(r.answer)}</div>`:""}</div>
-      <button type="button" class="qbtn" id="wqNext" style="width:100%;margin-top:10px">${q.i+1<q.list.length?"다음 문제 ▶":"끝내기"}</button>`;
-    $("wqNext").onclick=()=>{ q.i++; quizStep(); $("wqBody").scrollTop=0; }; $("wqNext").focus(); };
-  if(w.hasAns){ const go=()=>{ const v=$("wqAns").value.trim(); if(!v){ $("wqAns").focus(); return; } send({ans:v}); };
-    $("wqCheck").onclick=go; $("wqAns").onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } }; $("wqGive").onclick=()=>send({giveup:true}); }
-  else document.querySelectorAll("#wqBody [data-self]").forEach(b=>b.onclick=()=>send({self:b.dataset.self==="1"}));
+    if(r.correct) q.ok++; if(r.nowCleared) q.cleared++;
+    const msg=r.correct ? (r.nowCleared?`<big>🏆</big>클리어! 이 오답은 목록에서 사라져요`:w.cleared?`<big>⭕</big>정답!`:`<big>⭕</big>정답! ${r.item.clears}/${r.item.need} — 한 번 더 맞히면 클리어`)
+      : `<big>❌</big>아쉬워요! 풀이 과정을 보고 다음에 다시 도전해요`;
+    $("wqRes").innerHTML=`<div class="res ${r.correct?"ok":"no"}">${msg}<div class="ans">내 답: ${esc(v)} · 정답: ${esc(r.answer)}</div></div>`;
+    if(r.sol&&r.sol.length){ const b=$("wqSol"); b.hidden=false; b.insertAdjacentHTML("beforebegin",`<div class="qt" style="font-size:16px">📖 풀이 과정</div>`); showFiles(b,r.sol,"풀이"); }
+    $("wqNx").innerHTML=`<button type="button" class="qbtn" id="wqNext" style="width:100%">${q.i+1<q.list.length?"다음 문제 ▶":"끝내기"}</button>`;
+    $("wqNext").onclick=()=>{ q.i++; quizStep(); $("wqBody").scrollTop=0; }; };
+  $("wqCheck").onclick=go; $("wqAns").onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } };
 }
-$("wFile").onchange=async e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return;
-  const title=$("wTitle").value.trim();
-  const m=$("wMsg"); m.textContent="⬆ 오답을 넣는 중… 잠시만요"; 
-  try{ const b=await shrink(f); const b64=await toB64(b);
-    const r=await api({op:"wrong_add",code:CODE,b64,title});
-    if(!r.ok) throw new Error(r.message||"넣지 못했어요");
-    WR.unshift(r.item); wTab="left"; $("wTitle").value=""; renderWrong(null); m.textContent="✅ 오답 노트에 넣었어요! 퀴즈로 다시 풀 수 있어요."; setTimeout(()=>{ if(m.textContent.startsWith("✅")) m.textContent=""; },5000);
-  }catch(err){ m.textContent="⚠ "+(err.message||"넣지 못했어요")+" 다시 해 주세요."; } };
-
 function setupUpload(){
   const fixes=HW.filter(r=>r.status==="fix"||r.status==="fixed");
   const fixBtn=$("upKind").querySelector('[data-k="fix"]');
