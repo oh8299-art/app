@@ -9,7 +9,7 @@
 var OWNER_CODE = "0000";
 
 /* ===== 수학날개 서버 핵심 로직 (구글 Apps Script / 테스트 서버 공용) ===== */
-var COLS = ["students", "records", "classes", "notices", "tests", "materials", "teachers", "s_fees"];
+var COLS = ["students", "records", "classes", "notices", "tests", "materials", "teachers", "s_fees", "s_wrong"];
 var OWNER_ONLY = { teachers: 1 };
 /* 새 기능은 이름만 정하면 따로 서버를 고치지 않아도 저장돼요. 's_' 로 시작하는 곳은 학생 앱에도 보여요. */
 function validCol_(c) { return /^[a-z][a-z0-9_]{1,30}$/.test(String(c || "")); }
@@ -76,6 +76,38 @@ function handle(store, req) {
     var sname = (who.name || "학생") + "_숙제_" + kstDay_(0) + ".jpg";
     return { ok: true, id: store.saveFile(sname, "image/jpeg", sb, "sid:" + who.id) };
   }
+  /* ---- 오답 노트 (학생) ---- */
+  if (op === "wrong_add") {
+    if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 올려 주세요." };
+    var wb = String(req.b64 || "");
+    if (!wb) return { error: "empty", message: "사진이 비어 있어요." };
+    if (wb.length > 5 * 1024 * 1024) return { error: "too_big", message: "사진이 너무 커요." };
+    var wfid = store.saveFile((who.name || "학생") + "_오답_" + kstDay_(0) + ".jpg", "image/jpeg", wb, "sid:" + who.id);
+    return store.withLock(function () {
+      var wd = { sid: who.id, date: kstDay_(0), title: String(req.title || "").slice(0, 80) || "내가 찍은 오답", photo: wfid, answer: "", memo: "",
+        clears: 0, cleared: false, tries: 0, by: "student", createdAt: Date.now(), updatedAt: Date.now() };
+      var wid = newId_(); store.put("s_wrong", wid, wd); var o = wrongOut_(wd); o.id = wid; return { ok: true, item: o };
+    });
+  }
+  if (op === "wrong_try") {
+    if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 풀어 주세요." };
+    return store.withLock(function () {
+      var all = store.getAll("s_wrong"), id = String(req.id || ""), d = all[id];
+      if (!d || d.sid !== who.id) return { error: "not_found", message: "오답을 찾을 수 없어요." };
+      var today = kstDay_(0), hasAns = !!String(d.answer || "").trim(), ok;
+      if (req.giveup) ok = false;
+      else if (hasAns) ok = ansMatch_(req.ans, d.answer);
+      else ok = !!req.self;
+      d.tries = (d.tries || 0) + 1; d.lastTry = today;
+      var counted = false;
+      if (ok) { if (d.lastOk !== today && !d.cleared) { d.clears = (d.clears || 0) + 1; d.lastOk = today; counted = true; } if ((d.clears || 0) >= WRONG_CLEAR_N && !d.cleared) { d.cleared = true; d.clearedAt = today; } }
+      else if (!d.cleared) { d.clears = 0; d.misses = (d.misses || 0) + 1; d.lastOk = ""; }
+      d.updatedAt = Date.now(); store.put("s_wrong", id, d);
+      var o = wrongOut_(d); o.id = id;
+      return { ok: true, correct: ok, counted: counted, answer: hasAns ? String(d.answer) : "", item: o };
+    });
+  }
+
   if (op === "submit") {
     if (who.role !== "student") return { error: "forbidden", message: "학생 코드로 올려 주세요." };
     var kind = req.kind === "fix" ? "fix" : "hw";
@@ -181,8 +213,17 @@ function handle(store, req) {
   return { error: "bad_op", message: "알 수 없는 요청이에요." };
 }
 
+var WRONG_CLEAR_N = 2; // 다른 날 2번 맞히면 클리어
+function wrongOut_(d) { return { id: d.id, date: d.date, title: d.title || "", memo: d.memo || "", photo: d.photo, hasAns: !!String(d.answer || "").trim(),
+  clears: d.clears || 0, need: WRONG_CLEAR_N, cleared: !!d.cleared, clearedAt: d.clearedAt || "", lastOk: d.lastOk || "", tries: d.tries || 0, mine: d.by === "student" }; }
+function normAns_(x) { return String(x == null ? "" : x).replace(/[\uFF01-\uFF5E]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+  .replace(/\s+/g, "").replace(/[.,]$/,"").replace(/(번|개|cm|mm|m|km|kg|g|L|mL|원|명|장|쪽|살|시간|분|초|도|°)$/i, "").toLowerCase(); }
+function ansMatch_(got, ans) { var g = normAns_(got); if (!g) return false;
+  return String(ans).split(/\s*\|\s*|\s*\/\/\s*/).some(function (a) { var n = normAns_(a); if (!n) return false; if (n === g) return true;
+    var x = Number(n.replace(/,/g, "")), y = Number(g.replace(/,/g, "")); return !isNaN(x) && !isNaN(y) && Math.abs(x - y) < 1e-9; }); }
 function studentOwnsFile_(store, sid, fid) {
   if (store.fileDesc && store.fileDesc(fid) === "sid:" + sid) return true;
+  var w = store.getAll("s_wrong"); for (var c in w) if (w[c].sid === sid && w[c].photo === fid) return true;
   var t = store.getAll("tests"), m = store.getAll("materials");
   for (var a in t) if (t[a].sid === sid && (t[a].photos || []).indexOf(fid) >= 0) return true;
   for (var b in m) if (m[b].sid === sid) { var fs = m[b].files || []; for (var i = 0; i < fs.length; i++) if (fs[i] && fs[i].id === fid) return true; }
@@ -226,13 +267,14 @@ function studentPayload_(store, sid) {
     .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (r) { return { date: r.date, status: r.status, memo: r.memo || "", att: Number(r.att) || 0,
       subs: (r.subs || []).map(function (x) { return { at: x.at, kind: x.kind, files: x.files || [], note: x.note || "" }; }) }; });
   var extra = {};
-  allCols_(store).forEach(function (c) { if (c.indexOf("s_") !== 0) return;
+  allCols_(store).forEach(function (c) { if (c.indexOf("s_") !== 0 || c === "s_wrong") return;
     extra[c] = asList_(store.getAll(c)).filter(function (d) { return d.sid === sid; }).sort(byDate).slice(0, 100)
       .map(function (d) { var o = {}; for (var k in d) if (k !== "by" && k !== "sid") o[k] = d[k]; return o; }); });
+  var wrong = asList_(store.getAll("s_wrong")).filter(function (d) { return d.sid === sid && d.photo; }).sort(byDate).slice(0, 800).map(wrongOut_);
   var t = kstNow_().toISOString();
   return { month: month, week: week, updated: t.slice(0, 10) + " " + t.slice(11, 16), top: M.top, topWeek: W.top,
     me: { name: s.name || "", grade: s.grade || "", className: className(s.classId), points: m.points, done: m.done, rank: m.rank,
-      weekPoints: w.points, weekRank: w.rank, notices: notices, homework: homework, tests: tests, materials: mats, extra: extra, fees: extra.s_fees || [] } };
+      weekPoints: w.points, weekRank: w.rank, notices: notices, homework: homework, tests: tests, materials: mats, wrong: wrong, extra: extra, fees: extra.s_fees || [] } };
 }
 
 /* ===== 구글 시트·드라이브 연결 부분 ===== */
@@ -244,9 +286,10 @@ var VIEW_COLS = {
   tests: [["date", "날짜"], ["sid", "학생ID"], ["title", "시험"], ["score", "점수"], ["total", "만점"], ["memo", "코멘트"]],
   materials: [["date", "날짜"], ["sid", "학생ID"], ["title", "자료"], ["memo", "설명"]],
   teachers: [["name", "이름"], ["code", "코드"]],
+  s_wrong: [["date", "날짜"], ["sid", "학생ID"], ["title", "문제"], ["answer", "정답"], ["clears", "맞힌 횟수"], ["cleared", "클리어"], ["clearedAt", "클리어 날"]],
   s_fees: [["date", "안내일"], ["sid", "학생ID"], ["title", "항목"], ["amount", "금액"], ["paid", "완납"], ["paidAt", "완납일"], ["memo", "메모"]]
 };
-var SHEET_NAMES = { students: "학생", records: "숙제기록", classes: "반", notices: "숙제공지", tests: "테스트", materials: "자료", teachers: "선생님", s_fees: "교재비" };
+var SHEET_NAMES = { students: "학생", records: "숙제기록", classes: "반", notices: "숙제공지", tests: "테스트", materials: "자료", teachers: "선생님", s_fees: "교재비", s_wrong: "오답노트" };
 function viewCols_(col) { return VIEW_COLS[col] || [["date", "날짜"], ["sid", "학생ID"], ["title", "제목"], ["memo", "메모"]]; }
 function hasStudentName_(col) { return col === "records" || col === "tests" || col === "materials" || col.indexOf("s_") === 0; }
 var STATUS_KO = { none: "미제출", sub: "제출(피드백 대기)", fix: "오답 정리 중", fixed: "확인 대기", done: "완료", skip: "숙제 없음" };

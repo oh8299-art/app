@@ -3,9 +3,9 @@
 <meta name="apple-mobile-web-app-title" content="숙제체크"><link rel="apple-touch-icon" href="../icon.png"><link rel="icon" href="../icon.png">
 <meta name="robots" content="noindex,nofollow">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-16b">
+<script src="../config.js"></script><script src="api.js"></script><meta name="sn-ver" content="2026-11-26a">
 <script>/* 새 버전이 올라오면 자동으로 새로고침 */
-(function(){ var V="2026-11-16b"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
+(function(){ var V="2026-11-26a"; var busy=function(){ return document.querySelector("input:focus,textarea:focus") || (window.SN&&SN.busy&&SN.busy.n) || (document.getElementById("upq")&&!document.getElementById("upq").hidden); };
 function chk(){ fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"}).then(function(r){return r.text();}).then(function(t){ var m=t.match(/sn-ver" content="([^"]+)"/); if(m&&m[1]!==V&&!busy()){ try{ if(sessionStorage.getItem("sn-rl")===m[1]) return; sessionStorage.setItem("sn-rl",m[1]); }catch(e){} location.reload(); } }).catch(function(){}); }
 setTimeout(chk,1500); document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible") chk(); }); })();</script></head><body>
 <title>수학날개 숙제체크</title>
@@ -769,7 +769,7 @@ const UQ=(()=>{
     if(running&&!tick) tick=setInterval(()=>{ if(running) bar(); },1000);
   }
   async function add(o){
-    const j={id:"j"+Date.now()+Math.random().toString(36).slice(2,6),sids:o.sids,date:o.date,title:o.title,memo:o.memo||"",label:o.label||o.title,by:me||"",files:o.files.slice(),done:o.files.map(()=>null),createdAt:Date.now()};
+    const j={id:"j"+Date.now()+Math.random().toString(36).slice(2,6),kind:o.kind||"materials",answer:o.answer||"",sids:o.sids,date:o.date,title:o.title,memo:o.memo||"",label:o.label||o.title,by:me||"",files:o.files.slice(),done:o.files.map(()=>null),createdAt:Date.now()};
     jobs.push(j); await save(j); run(); }
   async function upOne(j,i){
     const x=j.files[i]; const isPdf=x.type==="application/pdf"||/\.pdf$/i.test(x.name||"");
@@ -789,12 +789,17 @@ const UQ=(()=>{
         const worker=async()=>{ while(next<todo.length){ const i=todo[next++]; j.done[i]=await upOne(j,i); save(j); bar(); } };
         await Promise.all([worker(),worker(),worker()]);
         const now=Date.now();
+        if(j.kind==="wrong"){
+          const items=[]; j.sids.forEach(sid=>j.done.forEach((f,i)=>{ const d={sid,date:j.date,title:j.title+(j.done.length>1?` (${i+1})`:""),answer:j.done.length>1?"":j.answer,memo:j.memo,photo:f.id,clears:0,cleared:false,tries:0,createdAt:now+i}; if(j.by) d.by=j.by; items.push(d); }));
+          await db.collection("s_wrong").addMany(items);
+        } else {
         const items=j.sids.map(sid=>{ const d={sid,date:j.date,title:j.title,memo:j.memo,files:j.done,createdAt:now}; if(j.by) d.by=j.by; return d; });
         await db.collection("materials").addMany(items);
+        }
         jobs.shift(); await drop(j.id);
-        toast(`✅ ${j.label} 자료를 올렸어요 · 학생 앱에 보여요`);
+        toast(`✅ ${j.label} ${j.kind==="wrong"?"":"자료를 "}올렸어요 · 학생 앱에 보여요`);
       }
-      running=false; bar(`✅ 다 올렸어요! 학생 앱 '자료'에 쌓였어요.`); setTimeout(()=>{ if(!jobs.length&&!running) bar(); },4000);
+      running=false; bar(`✅ 다 올렸어요! 학생 앱에 바로 보여요.`); setTimeout(()=>{ if(!jobs.length&&!running) bar(); },4000);
     }catch(err){
       running=false;
       bar(`⚠ ${err.serverMessage||err.message||"올리지 못했어요"} — 인터넷을 확인하고 다시 눌러 주세요`,{text:"다시 올리기",fn:()=>run()});
@@ -873,12 +878,13 @@ function _renderStudents(){
         ${s.code?`<span class="code">${esc(s.code)}</span><button class="ghost" data-code="copy">코드 보내기 복사</button>`:`<button class="ghost" data-code="new">학생 코드 만들기</button>`}
         <button class="ghost" data-tests="${s.id}" aria-expanded="${openTests===s.id}">테스트 기록 ${tests.filter(t=>t.sid===s.id).length}</button>
         <button class="ghost" data-mats="${s.id}" aria-expanded="${openMats===s.id}">자료 ${materials.filter(m=>m.sid===s.id).length}</button>
+        <button class="ghost" data-wrong="${s.id}" aria-expanded="${openWrong===s.id}">오답 ${wrongs.filter(w=>w.sid===s.id&&!w.cleared).length}</button>
         ${(()=>{ const u=fees.filter(f=>f.sid===s.id&&!f.paid).length; return `<button class="ghost" data-fees="${s.id}" aria-expanded="${openFees===s.id}" ${u?'style="border-color:var(--s-fix);color:var(--s-fix)"':""}>교재비${u?" 미납 "+u:""}</button>`; })()}
         <span style="flex:1"></span>
         <button class="ghost" data-edit="${s.id}" aria-expanded="${openEdit===s.id}">✏️ 정보 수정</button>
         ${pendingDel===s.id?`<button class="danger" data-del="yes">정말 삭제</button><button class="ghost" data-del="no">취소</button>`:`<button class="danger" data-del="ask">삭제</button>`}
       </div>
-      ${openEdit===s.id?editPanel(s):""}${openTests===s.id?testPanel(s):""}${openMats===s.id?matPanel(s):""}${openFees===s.id?feePanel(s):""}
+      ${openEdit===s.id?editPanel(s):""}${openTests===s.id?testPanel(s):""}${openMats===s.id?matPanel(s):""}${openWrong===s.id?wrongPanel(s):""}${openFees===s.id?feePanel(s):""}
     </div>`) : `<div class="empty">${!loaded?"불러오는 중…":findActive()&&students.some(inScope)?findEmpty():"등록된 학생이 없어요. 위에서 추가해 주세요."}</div>`;
 }
 function editPanel(s){
@@ -889,6 +895,7 @@ function editPanel(s){
     <button class="act w2" type="submit">저장</button><button class="ghost w2" type="button" data-edit="${s.id}">닫기</button>
     <p class="fmsg w4" id="fs-e-${s.id}"></p></form></div>`; }
 let openEdit=null;
+let openWrong=null, wrongs=[], wrongTab="left";
 let pendingDel=null, openTests=null, tests=[], openMats=null, materials=[], openFees=null, fees=[];
 const won=n=>(Number(n)||0).toLocaleString("ko-KR")+"원";
 const thisMonthFee=()=>`${parse(TODAY).getMonth()+1}월 교재비`;
@@ -923,6 +930,28 @@ function renderFees(){
   if(!$("fcMemo").value) $("fcMemo").value=lastFeeMemo();
 }
 function fileTile(f,label){ const pdf=f.type==="application/pdf"; return pdf?`<a class="ftile" href="#" data-fopen="${esc(f.id)}">📄 <span>${esc(f.name||label||"PDF")}</span></a>`:`<a href="#" data-fopen="${esc(f.id)}" style="display:block;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)"><img data-fid="${esc(f.id)}" alt="${esc(f.name||label||"사진")}" style="width:100%;height:100%;object-fit:cover"></a>`; }
+/* ---------- 오답 노트 ---------- */
+function wrongPanel(s){
+  const all=wrongs.filter(w=>w.sid===s.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0));
+  const left=all.filter(w=>!w.cleared), done=all.filter(w=>w.cleared), list=wrongTab==="done"?done:left;
+  const dots=w=>{ const n=Math.min(2,w.clears||0); return `<span style="letter-spacing:2px;color:var(--s-done)">${"⭕".repeat(n)}<span style="opacity:.25">${"⭕".repeat(2-n)}</span></span>`; };
+  return `<div class="tpanel">
+    <form class="tform" data-wform="${s.id}" novalidate>
+      <input class="w2" id="wt-${s.id}" placeholder="문제 (예: 왕수학 32쪽 5번)" aria-label="문제 이름">
+      <input class="w2" id="wa-${s.id}" placeholder="정답 (선택 · 쓰면 자동 채점)" aria-label="정답" autocomplete="off">
+      <input class="w4" id="wm-${s.id}" placeholder="힌트 한 줄 (선택 · 학생에게 보여요)" aria-label="힌트">
+      <label class="file">📷 틀린 문제 사진 (여러 장이면 한 장이 한 문제)<br><input id="wf-${s.id}" type="file" accept="image/*" multiple ${assetsApi?"":"disabled"}></label><b id="pf-wf-${s.id}" style="color:var(--s-done);grid-column:1/-1"></b>
+      <button class="act w4" type="submit">오답 넣기</button><p class="fmsg w4" id="fs-wf-${s.id}"></p>
+      <p class="hint w4" style="margin:0">정답을 쓰면 학생이 답을 입력해서 자동으로 채점돼요. 비워 두면 학생이 스스로 ⭕/❌를 눌러요. 정답이 여러 개면 <b>|</b> 로 나눠 쓰세요 (예: 1/2 | 0.5). <b>다른 날 2번</b> 맞히면 클리어돼요.</p>
+    </form>
+    <div class="seg" style="margin:6px 0"><button type="button" data-wtab="left" aria-pressed="${wrongTab!=="done"}">남은 오답 ${left.length}</button><button type="button" data-wtab="done" aria-pressed="${wrongTab==="done"}">클리어 ${done.length}</button></div>
+    ${list.length?list.map(w=>`<div class="titem"><div>${esc(w.title||"오답")} <small>${esc((w.date||"").slice(5).replace("-","/"))}${w.by==="student"?" · 학생이 올림":""}${w.tries?` · ${w.tries}번 도전`:""}${w.cleared?` · ${esc((w.clearedAt||"").slice(5).replace("-","/"))} 클리어`:""}</small>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap">${dots(w)}<input data-wans="${w.id}" value="${esc(w.answer||"")}" placeholder="정답 (선택)" style="max-width:150px;padding:5px 8px;font-size:13px" aria-label="정답"></div></div>
+      <span></span><span style="display:flex;gap:4px;flex-direction:column">${w.cleared||w.clears?`<button class="ghost" data-wreset="${w.id}" style="font-size:12px;padding:4px 8px">다시 풀기</button>`:""}<button class="danger" data-wdel="${w.id}">삭제</button></span>
+      <div class="thumbs">${fileTile({id:w.photo,type:"image/jpeg"},w.title)}</div></div>`).join("")
+      :`<p class="hint">${wrongTab==="done"?"아직 클리어한 오답이 없어요.":"남은 오답이 없어요. 틀린 문제 사진을 넣으면 학생 앱 '오답 노트'에서 퀴즈처럼 다시 풀어요."}</p>`}
+  </div>`;
+}
 function matPanel(s){
   const list=materials.filter(m=>m.sid===s.id).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.createdAt||0)-(a.createdAt||0));
   return `<div class="tpanel">
@@ -1147,6 +1176,15 @@ $("slist").addEventListener("submit",async e=>{
     try{ localStorage.setItem("hc-feememo",memo); }catch(_){}
     try{ await addFee(sid,title||"교재비",amount,memo); toast(`${won(amount)} 안내했어요 · 학생 앱에 바로 보여요`); $("ffa-"+sid).value=""; }catch(err){ handleWriteErr(err); }
     return; }
+  const wf=e.target.closest("[data-wform]");
+  if(wf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
+    const sid=wf.dataset.wform, fid="wf-"+sid; const g=k=>$(k+"-"+sid).value.trim();
+    const files=(pendingFiles[fid]||[]).filter(x=>!(x.type==="application/pdf"||/\.pdf$/i.test(x.name||"")));
+    if(!files.length) return setFS(fid,"틀린 문제 사진을 골라 주세요. (PDF는 안 돼요)","bad");
+    await UQ.add({kind:"wrong",sids:[sid],date:TODAY,title:g("wt")||"오답",answer:g("wa"),memo:g("wm"),files,label:((students.find(x=>x.id===sid)||{}).name||"")+" 오답"});
+    delete pendingFiles[fid]; showPF(fid); ["wt","wa","wm"].forEach(k=>$(k+"-"+sid).value="");
+    setFS(fid,`⬆ 오답 ${files.length}문제를 넣고 있어요. 아래 막대에서 진행 상황이 보여요.`,"ok");
+    return; }
   const mf=e.target.closest("[data-mform]");
   if(mf){ e.preventDefault(); if(!db||!canWrite) return toast("보기 전용이에요");
     const sid=mf.dataset.mform, fid="mf-"+sid; const g=k=>$(k+"-"+sid).value.trim();
@@ -1193,6 +1231,8 @@ $("slist").addEventListener("change",async e=>{
   if(!db||!canWrite) return toast("보기 전용이에요");
   try{ await db.collection("students").doc(sid).update({teacherId: sel.value==="none"?"":sel.value}); toast("담당 선생님을 바꿨어요"); }catch(err){ handleWriteErr(err); }
 });
+$("slist").addEventListener("change",async e=>{ const a=e.target.closest("[data-wans]"); if(!a) return; if(!db||!canWrite) return toast("보기 전용이에요");
+  try{ await db.collection("s_wrong").doc(a.dataset.wans).update({answer:a.value.trim()}); toast(a.value.trim()?"정답을 저장했어요":"정답을 지웠어요 · 학생이 스스로 채점해요"); }catch(err){ handleWriteErr(err); } });
 $("slist").addEventListener("click",async e=>{
   const pc=e.target.closest("[data-pfclear]");
   if(pc){ const id=pc.dataset.pfclear; delete pendingFiles[id]; showPF(id); setFS(id,"",""); return; }
@@ -1208,6 +1248,14 @@ $("slist").addEventListener("click",async e=>{
   if(eb){ openEdit = openEdit===sid?null:sid; renderStudents(); if(openEdit) setTimeout(()=>{ const i=$("en-"+sid); if(i) i.focus(); },50); return; }
   const fb=e.target.closest("[data-fees]");
   if(fb){ openFees = openFees===sid?null:sid; renderStudents(); return; }
+  const wb=e.target.closest("[data-wrong]");
+  if(wb){ openWrong = openWrong===sid?null:sid; renderStudents(); return; }
+  const wt=e.target.closest("[data-wtab]");
+  if(wt){ wrongTab=wt.dataset.wtab; renderStudents(); return; }
+  const wr=e.target.closest("[data-wreset]");
+  if(wr){ if(!db||!canWrite) return toast("보기 전용이에요"); try{ await db.collection("s_wrong").doc(wr.dataset.wreset).update({clears:0,cleared:false,clearedAt:"",lastOk:""}); toast("다시 풀 오답으로 돌렸어요"); }catch(err){ handleWriteErr(err); } return; }
+  const wd=e.target.closest("[data-wdel]");
+  if(wd){ if(!db||!canWrite) return toast("보기 전용이에요"); try{ await db.collection("s_wrong").doc(wd.dataset.wdel).delete(); toast("오답을 지웠어요"); }catch(err){ handleWriteErr(err); } return; }
   const mb=e.target.closest("[data-mats]");
   if(mb){ openMats = openMats===sid?null:sid; renderStudents(); return; }
   const md=e.target.closest("[data-mdel]");
@@ -1355,6 +1403,7 @@ async function connect(){
   subscribeRecs();
   db.collection("classes").onSnapshot(snap=>{ classes=snap.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>(a.order||0)-(b.order||0)); if(!(document.activeElement&&document.activeElement.matches("input,textarea,select"))) render(); });
   db.collection("notices").where("date",">=",addDays(TODAY,-60)).onSnapshot(snap=>{ notices=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="notice") renderNotices(); });
+  db.collection("s_wrong").onSnapshot(snap=>{ wrongs=snap.docs.map(d=>Object.assign({id:d.id},d.data())); const ae=document.activeElement; if(view==="students"&&!(ae&&ae.matches("input:not([type=file]),textarea,select")&&ae.closest(".tform,.tpanel"))) renderStudents(); });
   db.collection("s_fees").onSnapshot(snap=>{ fees=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform,#feeClassForm"))) renderStudents(); });
   db.collection("materials").onSnapshot(snap=>{ materials=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform"))) renderStudents(); });
   db.collection("tests").onSnapshot(snap=>{ tests=snap.docs.map(d=>Object.assign({id:d.id},d.data())); if(view==="students"&&!(document.activeElement&&document.activeElement.closest(".tform"))) renderStudents(); });
